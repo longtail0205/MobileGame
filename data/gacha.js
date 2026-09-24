@@ -86,8 +86,8 @@ GameData.gacha = {
     // ---- ピックアップ①: うみの でんせつ ------------------------------
     {
       id: 'pickup_sea',
-      name: 'あおき うみの でんせつ',
-      desc: 'UR アクアロア・SSR シオネ・SR イッカクジラ が でやすい！ UR の しゅつげんりつも 2ばい！',
+      name: 'ピックアップ①',
+      desc: 'UR ノブナガの出現率UP！',
       rates: { N: 49, R: 30, SR: 14, SSR: 5, UR: 2 },
       pool: null,
       pickup: ['aquaroa', 'shione', 'ikkakujira'],
@@ -98,8 +98,8 @@ GameData.gacha = {
     // ---- ピックアップ②: ほのおと いかずち ----------------------------
     {
       id: 'pickup_storm',
-      name: 'ぐれんと らいめいの フェス',
-      desc: 'UR ライメイオー・SSR カエンリュウ・SR ライガロウ が でやすい！ UR の しゅつげんりつも 2ばい！',
+      name: 'ピックアップ②',
+      desc: 'UR ヨシモトの出現率UP！',
       rates: { N: 49, R: 30, SR: 14, SSR: 5, UR: 2 },
       pool: null,
       pickup: ['raimeiou', 'kaenryu', 'raigarou'],

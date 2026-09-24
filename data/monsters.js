@@ -1402,13 +1402,13 @@ GameData.monsters = [
     desc: 'ほのおの つばさで そらを かける りゅう。はく ほのおは いわも とかし よぞらを まっかに そめる。',
   },
 
-  // ─── No.046 ライメイオー ───────────────────────── UR / でんき・ひこう
+  // ─── No.046 ヨシモト ───────────────────────── UR / でんき・ひこう
   {
     id: 'raimeiou',
     no: 46,
-    name: 'ライメイオー',
+    name: 'ヨシモト',
     rarity: 'UR',
-    types: ['electric', 'flying'],
+    types: ['grass', 'flying'],
     baseStats: { hp: 88, atk: 92, def: 80, spa: 125, spd: 90, spe: 115 }, // 合計 590
     learnset: [
       { lv: 1, move: 'jolt' },          // でんげき
@@ -1423,7 +1423,7 @@ GameData.monsters = [
     ],
     expGroup: 'slow',
     baseExp: 280,
-    image: '',
+    image: 'assets/monsters/ヨシモト.png',
     backImage: '',
     sprite: { shape: 'bird', colors: ['#f8d028', '#283870', '#f8f8f8'] },
     gacha: true,
@@ -1437,9 +1437,9 @@ GameData.monsters = [
   {
     id: 'aquaroa',
     no: 47,
-    name: 'アクアロア',
+    name: 'ノブナガ',
     rarity: 'UR',
-    types: ['water', 'dragon'],
+    types: ['fire', 'dark'],
     baseStats: { hp: 100, atk: 98, def: 92, spa: 120, spd: 108, spe: 82 }, // 合計 600
     learnset: [
       { lv: 1, move: 'watergun' },      // みずでっぽう
@@ -1454,7 +1454,7 @@ GameData.monsters = [
     ],
     expGroup: 'slow',
     baseExp: 290,
-    image: '',
+    image: 'assets/monsters/ノブナガ.png',
     backImage: '',
     sprite: { shape: 'serpent', colors: ['#1848a0', '#58d8e8', '#f8d860'] },
     gacha: true,
