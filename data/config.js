@@ -6,7 +6,7 @@ window.GameData = window.GameData || {};
 
 GameData.config = {
   title: 'ガチャモン',
-  subtitle: 'GACHA MONSTERS',
+  subtitle: '',
   version: '1.0.0',
 
   // セーブデータの保存キー（変えると別データ扱いになる）
