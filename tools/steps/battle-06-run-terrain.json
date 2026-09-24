@@ -1,0 +1,35 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/battle-test.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "App.state.addMonster('hinokon', {level: 20}); App.state.addMonster('mizupyon', {level: 20}); App.state.owned('hinokon').status = 'burn'; App.state.setSetting('textSpeed', 'fast'); 'ok'" },
+
+  { "eval": "window.__r = null; App.battle.startWild('happamaru', 3, { terrain: 'cave' }).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ return App.battle.debugState().terrain; })" },
+  { "wait": 150 },
+  { "shot": "r01-cave" },
+  { "eval": "BattleTest.autoplay({ command: 'run' }).then(function(x){ return window.__r + ' | ' + x.log.slice(-1)[0]; })" },
+
+  { "eval": "window.__r = null; App.battle.startWild('chunpi', 3, { terrain: 'indoor' }).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ return App.battle.debugState().terrain; })" },
+  { "wait": 150 },
+  { "shot": "r02-indoor" },
+  { "eval": "BattleTest.autoplay({ command: 'run' }).then(function(x){ return window.__r; })" },
+
+  { "eval": "window.__r = null; App.battle.startWild('imomun', 3, { terrain: 'forest' }).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ return App.battle.debugState().terrain; })" },
+  { "wait": 150 },
+  { "shot": "r03-forest" },
+  { "eval": "BattleTest.autoplay({ command: 'run' }).then(function(x){ return window.__r; })" },
+
+  { "eval": "window.__r = null; App.battle.startWild('raigarou', 45, { rng: function(){ return 0.99; } }).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ var b=App.battle._ctx().b; return JSON.stringify({ my: App.battleEngine.speedOf(b.player.battler), foe: App.battleEngine.speedOf(b.enemy.battler), chance: App.battleEngine.escapeChance(b) }); })" },
+  { "eval": "BattleTest.autoplay({ command: 'run', stopAt: 'command' }).then(function(x){ return App.battle._ctx() ? (App.battle._ctx().b.escapeAttempts + ' | ' + x.log.slice(-5).join(' / ')) : 'ended ' + window.__r; })" },
+  { "shot": "r04-runfail" },
+  { "eval": "App.battle._ctx().b.enemy.battler.inst.hp = 1; window.__ap = null; BattleTest.autoplay({ command: 'fight', move: 1 }).then(function(x){ window.__ap = x; }); 'go'" },
+  { "waitFor": "window.__r !== null && window.__ap !== null", "timeout": 60000 },
+  { "eval": "JSON.stringify(App.battle.debugState()) + ' LOG: ' + (window.__btlog || []).slice(-12).join(' / ')" },
+  { "eval": "JSON.stringify({ result: window.__r, stats: App.state.data.stats, textSpeed: App.state.setting('textSpeed') })" }
+]

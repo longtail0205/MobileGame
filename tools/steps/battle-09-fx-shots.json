@@ -1,0 +1,21 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/battle-test.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "App.state.addMonster('hinokon', {level: 12}); App.state.setSetting('textSpeed', 'fast'); 'ok'" },
+  { "eval": "window.__r = null; App.battle.startWild('mizupyon', 12, { rng: function(){ return 0.99; } }).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ return App.battle.debugState().phase; })" },
+  { "eval": "BattleTest.autoplay({ move: 1, stopAt: 'moves' }).then(function(){ return App.battle.debugState().phase; })" },
+  { "key": "ArrowRight" },
+  { "key": "KeyZ" },
+  { "wait": 450 },
+  { "shot": "f01-growl-a" },
+  { "wait": 250 },
+  { "shot": "f02-growl-b" },
+  { "wait": 900 },
+  { "shot": "f03-enemy-move" },
+  { "wait": 500 },
+  { "shot": "f04-enemy-move2" }
+]

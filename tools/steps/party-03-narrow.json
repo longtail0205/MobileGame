@@ -1,0 +1,22 @@
+[
+  {"goto": "index.html"},
+  {"clearStorage": true},
+  {"goto": "index.html?autostart=1&tab=party"},
+  {"waitFor": "window.App && App.ready", "timeout": 8000},
+  {"eval": "(function(){ const ids=['hinokon','mizupyon','happamaru','chunpi','kamadon','raigarou','morinonushi','kaenryu','raimeiou','kokuyouryu','yurari']; ids.forEach((id,i)=>App.state.addMonster(id,{level: 5 + i*3})); App.monster.addExp(App.state.owned('hinokon'), 20000); App.state.owned('chunpi').status='paralyze'; App.state.save(); App.events.emit('monster:updated',{speciesId:'hinokon'}); return document.documentElement.scrollWidth + ' / ' + window.innerWidth; })()"},
+  {"wait": 300},
+  {"shot": "20-narrow-top"},
+  {"eval": "(function(){ document.querySelector('.pt-detail').scrollIntoView(); return 'detailTop=' + Math.round(document.querySelector('.pt-detail').getBoundingClientRect().top); })()"},
+  {"wait": 200},
+  {"shot": "21-narrow-detail"},
+  {"eval": "(function(){ document.querySelector('.pt-box').scrollIntoView(); return 'scrollW=' + document.documentElement.scrollWidth; })()"},
+  {"wait": 200},
+  {"shot": "22-narrow-box"},
+  {"eval": "(function(){ document.querySelector('.pt-grid .mcard[data-species=kaenryu]').click(); return 'sel=' + App.partyTab.selected(); })()"},
+  {"wait": 800},
+  {"eval": "'detailTopAfterSelect=' + Math.round(document.querySelector('.pt-detail').getBoundingClientRect().top)"},
+  {"shot": "23-narrow-selected"},
+  {"eval": "document.querySelector('.pt-move-edit').click(); 'm'"},
+  {"wait": 400},
+  {"shot": "24-narrow-move-modal"}
+]

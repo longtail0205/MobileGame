@@ -3,7 +3,7 @@
   { "clearStorage": true },
   { "goto": "index.html?autostart=1&tab=adventure" },
   { "waitFor": "window.App && App.ready", "timeout": 8000 },
-  { "eval": "window.__log = []; App.dialog.say(['こんにちは {player}！' + String.fromCharCode(10) + 'ここは FEVER BATTLEの せかい だよ。', 'この メッセージは とても ながい ぶんしょうなので じどうで おりかえされて つぎの ページに すすむ はず です。 さいごまで よんでね！']).then(() => __log.push('say1 done')); 'started'" },
+  { "eval": "window.__log = []; App.dialog.say(['こんにちは {player}！' + String.fromCharCode(10) + 'ここは ガチャモンの せかい だよ。', 'この メッセージは とても ながい ぶんしょうなので じどうで おりかえされて つぎの ページに すすむ はず です。 さいごまで よんでね！']).then(() => __log.push('say1 done')); 'started'" },
   { "wait": 250 },
   { "shot": "20-dialog-typing" },
   { "wait": 1200 },

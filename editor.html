@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a1f66">
+  <title>ガチャモン データエディタ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+  <link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+  <div id="ed-app">
+    <div id="ed-boot" class="ed-boot">エディタを読み込んでいます…</div>
+  </div>
+  <noscript>このエディタを使うには JavaScript を有効にしてください。</noscript>
+
+  <!-- ゲームデータ（index.html と同じ順番） -->
+  <script src="data/config.js"></script>
+  <script src="data/tiles.js"></script>
+  <script src="data/types.js"></script>
+  <script src="data/moves.js"></script>
+  <script src="data/monsters.js"></script>
+  <script src="data/gacha.js"></script>
+  <script src="data/trainers.js"></script>
+  <script src="data/maps.js"></script>
+  <!-- エディタが使うモジュール（ゲーム本体の他モジュールは読み込まない） -->
+  <script src="js/core/util.js"></script>
+  <script src="js/core/events.js"></script>
+  <script src="js/core/data.js"></script>
+  <script src="js/gfx/sprites.js"></script>
+  <!-- タイル描画（未作成でもエディタは動く。無い場合は簡易表示） -->
+  <script src="js/gfx/tiles.js" onerror="window.__edTilesMissing = true"></script>
+  <script src="js/editor/editor.js"></script>
+</body>
+</html>

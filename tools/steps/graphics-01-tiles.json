@@ -1,0 +1,12 @@
+[
+  { "goto": "tools/gfx-preview.html?only=tiles&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "eval": "JSON.stringify(App.tiles.stats()) + ' / draws=' + App.tiles.drawNames().length" },
+  { "shot": "01-tiles" },
+  { "goto": "tools/gfx-preview.html?only=samples&sample=0&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "02-sample-town" },
+  { "goto": "tools/gfx-preview.html?only=samples&sample=1&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "03-sample-nature" }
+]

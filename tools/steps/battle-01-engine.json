@@ -1,0 +1,8 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/battle-test.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "JSON.stringify(BattleTest.engine())" }
+]

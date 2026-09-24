@@ -1,0 +1,7 @@
+[
+  { "goto": "tools/gfx-preview.html" },
+  { "waitFor": "window.__gfxReady", "timeout": 10000 },
+  { "wait": 700 },
+  { "eval": "JSON.stringify(App.tiles.stats()) + ' err=' + JSON.stringify(document.getElementById('err').textContent)" },
+  { "shot": "00-all-top" }
+]

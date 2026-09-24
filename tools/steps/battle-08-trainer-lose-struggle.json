@@ -1,0 +1,20 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/battle-test.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "App.state.addMonster('mizupyon', {level: 6}); var m = App.state.owned('mizupyon'); m.moves.forEach(function(x){ x.pp = 0; }); App.state.setSetting('textSpeed', 'fast'); 'ok'" },
+  { "eval": "window.__r = null; App.battle.startWild('hinokon', 2).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ return JSON.stringify([App.battle.debugState().phase, App.audio.currentBgm ? App.audio.currentBgm() : '-']); })" },
+  { "eval": "window.__btlog = []; window.__ap = null; BattleTest.autoplay({ command: 'fight' }).then(function(x){ window.__ap = x; }); 'go'" },
+  { "waitFor": "window.__r !== null && window.__ap !== null", "timeout": 60000 },
+  { "eval": "window.__r + ' | ' + window.__ap.log.slice(0, 6).join(' / ').split(String.fromCharCode(10)).join('')" },
+  { "eval": "App.state.healAll(); App.state.owned('mizupyon').level = 2; App.monster.heal(App.state.owned('mizupyon')); App.monster.setMoves(App.state.owned('mizupyon'), ['growl']); window.__p0 = App.state.points(); 'ok'" },
+  { "eval": "window.__r = null; App.battle.startTrainer('route1_kenta').then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ stopAt: 'command' }).then(function(){ return JSON.stringify([App.battle.debugState().phase, App.audio.currentBgm ? App.audio.currentBgm() : '-']); })" },
+  { "eval": "window.__btlog = []; window.__ap = null; BattleTest.autoplay({ command: 'fight' }).then(function(x){ window.__ap = x; }); 'go'" },
+  { "waitFor": "window.__r !== null && window.__ap !== null", "timeout": 90000 },
+  { "eval": "window.__r + ' | ' + window.__ap.log.slice(-4).join(' / ').split(String.fromCharCode(10)).join('')" },
+  { "eval": "JSON.stringify({ pointsDelta: App.state.points() - window.__p0, defeated: App.state.isTrainerDefeated('route1_kenta'), stats: App.state.data.stats, bgm: App.audio.currentBgm ? App.audio.currentBgm() : '-', layerHidden: document.getElementById('battle-layer').hidden, inputDepth: App.input.depth ? App.input.depth() : '-' })" }
+]

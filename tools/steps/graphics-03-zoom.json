@@ -1,0 +1,5 @@
+[
+  { "goto": "tools/gfx-preview.html?only=tiles&t=0&scale=6" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "08-tiles-zoom" }
+]

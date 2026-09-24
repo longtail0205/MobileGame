@@ -229,7 +229,7 @@
   function buildTopbar() {
     const title = $('#tb-title');
     const sub = $('#tb-sub');
-    if (title) title.textContent = cfg().title || 'FEVER BATTLE';
+    if (title) title.textContent = cfg().title || 'ガチャモン';
     if (sub) sub.textContent = cfg().subtitle || '';
     if (cfg().title) document.title = cfg().title;
 
@@ -479,7 +479,7 @@
     const input = el('input', { class: 'input input-lg', type: 'text', value: def, maxlength: 8, placeholder: def, autocomplete: 'off', spellcheck: 'false' });
     const body = el('div', { class: 'newgame-body' },
       el('div', { class: 'newgame-logo' },
-        el('span', { class: 'logo-main', text: cfg().title || 'FEVER BATTLE' }),
+        el('span', { class: 'logo-main', text: cfg().title || 'ガチャモン' }),
         el('span', { class: 'logo-sub', text: cfg().subtitle || '' })),
       el('p', { class: 'modal-text center', text: 'ようこそ！ ガチャで なかまを あつめて\nぼうけんに でかけよう！' }),
       el('label', { class: 'field-label', text: 'きみの なまえを おしえてね（8もじまで）' }),

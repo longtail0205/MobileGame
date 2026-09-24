@@ -1,0 +1,14 @@
+[
+  { "goto": "tools/gfx-preview.html?only=samples&sample=3&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "04-sample-center" },
+  { "goto": "tools/gfx-preview.html?only=samples&sample=4&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "05-sample-house" },
+  { "goto": "tools/gfx-preview.html?only=samples&sample=5&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "06-sample-cave" },
+  { "goto": "tools/gfx-preview.html?only=samples&sample=2&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "07-sample-river" }
+]

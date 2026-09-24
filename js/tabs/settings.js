@@ -112,7 +112,7 @@
 
     // バージョン
     grid.appendChild(el('div', { class: 'about' },
-      el('b', { text: (cfg().title || 'FEVER BATTLE') + ' ' }), el('span', { text: 'ver ' + (cfg().version || '-') }),
+      el('b', { text: (cfg().title || 'ガチャモン') + ' ' }), el('span', { text: 'ver ' + (cfg().version || '-') }),
       el('div', { class: 'muted', text: 'モンスター・マップ・キャラクター・きょく は すべて オリジナル です。' })));
 
     panel.appendChild(grid);

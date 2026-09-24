@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ガチャモン gfx プレビュー（graphics 担当）</title>
+<style>
+  body { background: #262b36; color: #e8ecf4; font: 13px/1.4 'Segoe UI', 'Meiryo', sans-serif; margin: 10px 14px; }
+  h1 { font-size: 18px; margin: 4px 0 8px; }
+  h2 { font-size: 15px; margin: 18px 0 6px; padding: 3px 8px; background: #3a4152; border-left: 4px solid #f0c040; }
+  h3 { font-size: 13px; margin: 10px 0 4px; color: #c8d0e0; }
+  nav a { color: #9cc8ff; margin-right: 10px; }
+  canvas, img { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  .grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card { background: #343a48; padding: 4px 4px 3px; border-radius: 6px; text-align: center; font-size: 11px; }
+  .card .pair { display: flex; gap: 3px; justify-content: center; }
+  .card b { color: #ffe08a; font-size: 13px; }
+  .map { display: inline-block; margin: 0 12px 12px 0; vertical-align: top; }
+  .map .cap { font-size: 12px; margin-bottom: 3px; color: #c8d0e0; }
+  .row { display: flex; gap: 4px; align-items: flex-end; flex-wrap: wrap; }
+  .look { background: #343a48; border-radius: 6px; padding: 6px; margin: 0 8px 8px 0; display: inline-block; vertical-align: top; }
+  .look .cap { font-size: 11px; color: #c8d0e0; margin-bottom: 4px; }
+  .mon { background: #e8f0e0; border-radius: 6px; padding: 4px; display: inline-block; margin: 0 6px 6px 0; color: #222; text-align: center; font-size: 11px; }
+  #err { color: #ff8080; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>ガチャモン gfx プレビュー</h1>
+<nav>
+  <a href="?">すべて</a>
+  <a href="?only=tiles">タイル一覧</a>
+  <a href="?only=samples">サンプル</a>
+  <a href="?only=maps">GameData.maps</a>
+  <a href="?only=chars">キャラ</a>
+  <a href="?only=mons">モンスター</a>
+  <span style="color:#8890a0">（?scale=2 で縮小、?t=ミリ秒 で時間固定）</span>
+</nav>
+<div id="err"></div>
+<div id="root"></div>
+
+<script src="../data/config.js"></script>
+<script src="../data/tiles.js"></script>
+<script src="../data/types.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/monsters.js"></script>
+<script src="../data/gacha.js"></script>
+<script src="../data/trainers.js"></script>
+<script src="../data/maps.js"></script>
+<script src="../js/gfx/sprites.js"></script>
+<script src="../js/gfx/tiles.js"></script>
+<script>
+(function () {
+  'use strict';
+  const qs = new URLSearchParams(location.search);
+  const ONLY = qs.get('only') || '';
+  const SCALE = Math.max(1, parseInt(qs.get('scale') || '3', 10) || 3);
+  const FIXED_T = qs.has('t') ? Number(qs.get('t')) || 0 : null;
+  const T = 16;
+  const root = document.getElementById('root');
+  const errBox = document.getElementById('err');
+  window.addEventListener('error', (e) => { errBox.textContent += (e.message || e) + '\n'; });
+
+  const el = (tag, attrs, kids) => {
+    const n = document.createElement(tag);
+    if (attrs) for (const k of Object.keys(attrs)) { if (k === 'text') n.textContent = attrs[k]; else if (k === 'style') n.style.cssText = attrs[k]; else n.setAttribute(k, attrs[k]); }
+    (kids || []).forEach((c) => c && n.appendChild(c));
+    return n;
+  };
+  const show = (name) => !ONLY || ONLY === name;
+  const animated = [];   // { redraw(t) }
+
+  function scaledCanvas(w, h, scale) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    cv.style.width = (w * scale) + 'px'; cv.style.height = (h * scale) + 'px';
+    return cv;
+  }
+
+  // ---- 行の長さをそろえる（サンプル用）
+  function normRows(rows, fill) {
+    const w = Math.max.apply(null, rows.map((r) => r.length));
+    return rows.map((r) => (r + fill.repeat(w)).slice(0, w));
+  }
+
+  // ---- マップ描画（field と同じ使い方: draw → キャラ → drawOverlay）
+  function mapView(map, opts) {
+    opts = opts || {};
+    const rows = normRows(map.tiles, map.border || '.');
+    const h = rows.length, w = rows[0].length, pad = opts.pad == null ? 1 : opts.pad;
+    const border = map.border || rows[0][0];
+    const at = (x, y) => (y >= 0 && y < h && x >= 0 && x < w) ? rows[y][x] : border;
+    const cv = scaledCanvas((w + pad * 2) * T, (h + pad * 2) * T, opts.scale || SCALE);
+    const ctx = cv.getContext('2d');
+    const chars = opts.chars || [];
+    let anim = false;
+    for (let y = -pad; y < h + pad; y++) for (let x = -pad; x < w + pad; x++) if (App.tiles.isAnimated(at(x, y))) anim = true;
+    const redraw = (t) => {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (let y = -pad; y < h + pad; y++) {
+        for (let x = -pad; x < w + pad; x++) {
+          App.tiles.draw(ctx, at(x, y), (x + pad) * T, (y + pad) * T, t, (dx, dy) => at(x + dx, y + dy));
+        }
+      }
+      chars.slice().sort((a, b) => a.y - b.y).forEach((c) => {
+        const px = (c.x + pad) * T, py = (c.y + pad) * T;
+        App.sprites.drawCharacter(ctx, px, py, c.dir || 'down', c.frame || 0, c.look);
+        App.tiles.drawOverlay(ctx, at(c.x, c.y), px, py, t);
+        if (c.emote) App.sprites.drawEmote(ctx, px, py - 24, c.emote);
+      });
+    };
+    redraw(FIXED_T == null ? 0 : FIXED_T);
+    if (anim || chars.length) animated.push({ redraw });
+    return cv;
+  }
+
+  // =================================================================== 1) タイル一覧
+  function sectionTiles() {
+    root.appendChild(el('h2', { text: 'タイル一覧（左: 同じタイルに囲まれた場合 / 右: 草地に囲まれた場合）' }));
+    const grid = el('div', { class: 'grid' });
+    const tiles = GameData.tiles;
+    const syms = Object.keys(tiles).concat(['?']);
+    const fake = { '?': { name: '未定義の記号', draw: 'nosuchdraw' } };
+    syms.forEach((ch) => {
+      const def = tiles[ch] || fake[ch];
+      if (!tiles[ch]) GameData.tiles['?'] = fake['?'];
+      const pair = el('div', { class: 'pair' });
+      ['same', 'grass'].forEach((mode) => {
+        const cv = scaledCanvas(T, T, SCALE);
+        const ctx = cv.getContext('2d');
+        const at = mode === 'same' ? null : ((dx, dy) => ((dx || dy) ? '.' : ch));
+        const redraw = (t) => { ctx.clearRect(0, 0, T, T); App.tiles.draw(ctx, ch, 0, 0, t, at); };
+        redraw(FIXED_T == null ? 0 : FIXED_T);
+        if (App.tiles.isAnimated(ch)) animated.push({ redraw });
+        pair.appendChild(cv);
+      });
+      grid.appendChild(el('div', { class: 'card' }, [
+        pair,
+        el('div', {}, [el('b', { text: ch }), document.createTextNode(' ' + def.name)]),
+        el('div', { style: 'color:#9aa4b8', text: def.draw + (App.tiles.isAnimated(ch) ? ' ★anim' : '') }),
+      ]));
+    });
+    root.appendChild(grid);
+    // 未知記号のダミーを残さない
+    delete GameData.tiles['?'];
+    // draw 名の網羅チェック
+    const missing = [];
+    Object.keys(tiles).forEach((ch) => { if (!App.tiles.hasDraw(tiles[ch].draw)) missing.push(ch + ':' + tiles[ch].draw); });
+    root.appendChild(el('div', { style: 'margin-top:6px;color:' + (missing.length ? '#ff8080' : '#80e0a0'),
+      text: missing.length ? '未実装の draw: ' + missing.join(', ') : 'data/tiles.js の全 draw 名を実装済み（' + Object.keys(tiles).length + ' 記号）' }));
+  }
+
+  // =================================================================== 2) サンプル（記号の組み合わせ見本）
+  const LOOKS = {
+    player: (GameData.config.player || {}).look,
+    girl: { skin: '#f8d8b8', hair: '#c06030', hairStyle: 'long', shirt: '#40a0e0', pants: '#f0f0f0', hat: null, accent: '#ffffff' },
+    boy: { skin: '#e8b890', hair: '#202020', hairStyle: 'spiky', shirt: '#40b060', pants: '#604020', hat: null },
+    old: { skin: '#f0c8a0', hair: '#d8d8d8', hairStyle: 'bald', shirt: '#806040', pants: '#404040', hat: null },
+    nurse: { skin: '#f8d8c0', hair: '#f090b0', hairStyle: 'bun', shirt: '#f8f8f8', pants: '#f8a0c0', hat: '#f8f8f8', accent: '#f06080' },
+  };
+  const SAMPLES = [
+    {
+      name: '町（屋根4種・壁・窓・ドア・道・看板・花）',
+      map: { border: 'T', tiles: [
+        'TTTTTTTTTTTTTTTTTTTTTTTT',
+        'T.....................FT',
+        'T..hhhh.....ccccc....FFT',
+        'T..hhhh.....ccccc......T',
+        'T..wnDw.....wnDnw..S...T',
+        'T....:........:........T',
+        'T.S..::::::::::::::::..T',
+        'T..........:.......:...T',
+        'T.jjjjjj...:..ggggg:...T',
+        'T.jjjjjj...:..ggggg:...T',
+        'T.jjjjjj...:..wnDnw:...T',
+        'T.nwwwwn...:....:..:...T',
+        'T.wwwDww...:....::::...T',
+        'T....:.....:...........T',
+        'T....:::::::::::::fffffT',
+        'TTTTTTTTTTT::TTTTTTTTTTT',
+      ] },
+      chars: [{ x: 14, y: 5, dir: 'down', look: LOOKS.player }, { x: 5, y: 7, dir: 'right', frame: 1, look: LOOKS.girl, emote: '!' }],
+    },
+    {
+      name: '自然（草むら・木・池と橋・崖・砂浜・柵・岩）',
+      map: { border: 'T', tiles: [
+        'TTTTTTTTTTTTTTTTTTTTTTTT',
+        'TTT......,,,,,,.....TTTT',
+        'TT.......,,,,,,.......TT',
+        'T...o....,,,,,,..MMMMM.T',
+        'T.........::.....MMMMM.T',
+        'T..FFF....::...........T',
+        'T..FFF....::..WWWWWW...T',
+        'T.........::::BBBBBB:::T',
+        'T.S...........WWWWWW...T',
+        'T.ffffff......WWWWWW...T',
+        'T.......f.....sssss....T',
+        'T...o...f.sssssssssss..T',
+        'TWWWWWWWWWWWWWWWWWWWWWWT',
+        'TTTTTTTTTTTTTTTTTTTTTTTT',
+      ] },
+      chars: [{ x: 11, y: 2, dir: 'down', look: LOOKS.player }, { x: 12, y: 3, dir: 'left', look: LOOKS.boy }],
+    },
+    {
+      name: '縦の橋・川・木立',
+      map: { border: 'T', tiles: [
+        'TTTTTTT::TTTTTTT',
+        'T.T.T..::..T.T.T',
+        'T......::......T',
+        'WWWWWWWBBWWWWWWW',
+        'WWWWWWWBBWWWWWWW',
+        'T......::...TT.T',
+        'T.,,,..::...TTTT',
+        'TTTTTTT::TTTTTTT',
+      ] },
+    },
+    {
+      name: 'センター室内（壁・カウンター・回復/ガチャマシン・じゅうたん・マット）',
+      map: { border: 'V', tiles: [
+        '############',
+        '############',
+        '#p__H____Gp#',
+        '#__====__G_#',
+        '#__________#',
+        '#bb__KK___t#',
+        '#____KK___t#',
+        '#__________#',
+        '#####mm#####',
+      ] },
+      chars: [{ x: 5, y: 2, dir: 'down', look: LOOKS.nurse }, { x: 5, y: 5, dir: 'up', look: LOOKS.player }],
+    },
+    {
+      name: '家の室内（本棚・ベッド・テーブル・観葉植物）',
+      map: { border: 'V', tiles: [
+        '##########',
+        '##########',
+        '#bb__k_p_#',
+        '#____k___#',
+        '#_tt_____#',
+        '#_tt__KK_#',
+        '#p____KK_#',
+        '####mm####',
+      ] },
+      chars: [{ x: 4, y: 4, dir: 'left', look: LOOKS.old }],
+    },
+    {
+      name: '洞窟（床・安全な床・壁・暗闇）',
+      map: { border: 'V', tiles: [
+        'VVrrrrrrrrrrrrVV',
+        'rrrrrrrrrrrrrrrr',
+        'rrrrrrrrrrrrrrrr',
+        'rruuuuurrrqqqqrr',
+        'ruuuouuuuuqqqqqr',
+        'ruuuuuuuuuqqqqqr',
+        'rrruuuuuuuuuuurr',
+        'rrrrruuuuuurrrrr',
+        'VVrrrrrrrrrrrrVV',
+      ] },
+      chars: [{ x: 7, y: 5, dir: 'down', look: LOOKS.player }],
+    },
+  ];
+  function sectionSamples() {
+    root.appendChild(el('h2', { text: 'サンプル（マップ作成の見本）' }));
+    const pick = qs.has('sample') ? Number(qs.get('sample')) : -1;
+    SAMPLES.forEach((s, i) => {
+      if (pick >= 0 && i !== pick) return;
+      root.appendChild(el('div', { class: 'map' }, [el('div', { class: 'cap', text: s.name }), mapView(s.map, { chars: s.chars, pad: 0 })]));
+    });
+  }
+
+  // =================================================================== 3) GameData.maps
+  function sectionMaps() {
+    root.appendChild(el('h2', { text: 'GameData.maps（border 1マス付き）' }));
+    const maps = GameData.maps || {};
+    Object.keys(maps).forEach((id) => {
+      const m = maps[id];
+      const chars = [];
+      (m.npcs || []).forEach((n) => {
+        let look = n.look;
+        if (!look && n.trainer && GameData.trainers && GameData.trainers[n.trainer]) look = GameData.trainers[n.trainer].look;
+        chars.push({ x: n.x, y: n.y, dir: n.dir || 'down', look: look || {} });
+      });
+      if (GameData.worldStart && GameData.worldStart.map === id) chars.push({ x: GameData.worldStart.x, y: GameData.worldStart.y, dir: GameData.worldStart.dir, look: LOOKS.player });
+      const w = (m.tiles[0] || '').length, h = m.tiles.length;
+      root.appendChild(el('div', { class: 'map' }, [
+        el('div', { class: 'cap', text: id + ' 「' + (m.name || '') + '」 ' + w + 'x' + h + (m.indoor ? ' 室内' : '') }),
+        mapView(m, { chars, pad: 1 }),
+      ]));
+    });
+  }
+
+  // =================================================================== 4) キャラクター
+  function sectionChars() {
+    root.appendChild(el('h2', { text: 'キャラクター（4方向 × 3フレーム）・立ち絵・後ろ姿・吹き出し' }));
+    const looks = [['主人公', LOOKS.player]];
+    Object.keys(GameData.trainers || {}).forEach((id) => { const t = GameData.trainers[id]; looks.push([(t.className || '') + ' ' + (t.name || id), t.look || {}]); });
+    ['girl', 'boy', 'old', 'nurse'].forEach((k) => looks.push(['見本 ' + k, LOOKS[k]]));
+    looks.forEach(([name, look]) => {
+      const row = el('div', { class: 'row' });
+      ['down', 'left', 'right', 'up'].forEach((dir) => {
+        for (let f = 0; f < 3; f++) {
+          const src = App.sprites.characterCanvas(look, dir, f);
+          const cv = scaledCanvas(16, 24, SCALE);
+          cv.getContext('2d').drawImage(src, 0, 0);
+          row.appendChild(cv);
+        }
+      });
+      const pt = el('img', { src: App.sprites.trainerPortrait(look), style: 'width:' + 64 * 2 + 'px;height:' + 64 * 2 + 'px;background:#e8f0f8;border-radius:4px' });
+      row.appendChild(pt);
+      if (name === '主人公') row.appendChild(el('img', { src: App.sprites.playerBack(look), style: 'width:128px;height:128px;background:#e8f0f8;border-radius:4px' }));
+      root.appendChild(el('div', { class: 'look' }, [el('div', { class: 'cap', text: name }), row]));
+    });
+    const er = el('div', { class: 'row' });
+    ['!', '?', '♪', '…', '♥'].forEach((type) => {
+      const cv = scaledCanvas(16, 16, SCALE);
+      App.sprites.drawEmote(cv.getContext('2d'), 0, 0, type);
+      er.appendChild(cv);
+    });
+    root.appendChild(el('div', { class: 'look' }, [el('div', { class: 'cap', text: '吹き出し drawEmote' }), er]));
+  }
+
+  // =================================================================== 5) モンスター
+  function sectionMons() {
+    root.appendChild(el('h2', { text: 'モンスター（数体）' }));
+    const list = (GameData.monsters || []).filter((m, i) => i % 6 === 0).slice(0, 10);
+    list.forEach((m) => {
+      const f = App.sprites.monsterSprite(m.id, 'front');
+      const b = App.sprites.monsterSprite(m.id, 'back');
+      root.appendChild(el('div', { class: 'mon' }, [
+        el('div', { class: 'row' }, [
+          el('img', { src: f.src, style: 'width:128px;height:128px;' + (f.flip ? 'transform:scaleX(-1)' : '') }),
+          el('img', { src: b.src, style: 'width:64px;height:64px;' + (b.flip ? 'transform:scaleX(-1)' : '') }),
+        ]),
+        el('div', { text: (m.no || '') + ' ' + m.name + ' [' + m.rarity + ']' }),
+      ]));
+    });
+  }
+
+  try {
+    App.sprites.init();
+    if (show('tiles')) sectionTiles();
+    if (show('samples')) sectionSamples();
+    if (show('maps')) sectionMaps();
+    if (show('chars')) sectionChars();
+    if (show('mons')) sectionMons();
+  } catch (e) {
+    errBox.textContent += (e && e.stack) || String(e);
+    throw e;
+  }
+  window.__gfxReady = true;
+  window.__gfxStats = () => App.tiles.stats();
+
+  if (FIXED_T == null) {
+    let last = 0;
+    const loop = (now) => {
+      if (now - last > 90) { last = now; animated.forEach((a) => a.redraw(now)); }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>

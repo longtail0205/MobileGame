@@ -1,0 +1,23 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "App.state.addMonster('hinokon', {level: 12}); App.state.addMonster('mizupyon', {level: 8}); App.state.party().map(function(m){return m.speciesId+':'+m.level}).join()" },
+  { "eval": "window.__r = null; App.battle.startWild('happamaru', 6).then(function(r){ window.__r = r; }); 'started'" },
+  { "wait": 500 },
+  { "shot": "w01-slide" },
+  { "waitFor": "App.battle.debugState().phase === 'wait'", "timeout": 8000 },
+  { "shot": "w02-intro" },
+  { "key": "KeyZ" },
+  { "waitFor": "App.battle.debugState().phase === 'command'", "timeout": 8000 },
+  { "wait": 200 },
+  { "shot": "w03-command" },
+  { "key": "KeyZ" },
+  { "waitFor": "App.battle.debugState().phase === 'moves'", "timeout": 3000 },
+  { "shot": "w04-moves" },
+  { "key": "KeyZ" },
+  { "wait": 900 },
+  { "shot": "w05-attack" },
+  { "eval": "JSON.stringify(App.battle.debugState())" }
+]

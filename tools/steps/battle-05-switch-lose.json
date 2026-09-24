@@ -1,0 +1,22 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/battle-test.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "App.state.addMonster('hinokon', {level: 3}); App.state.addMonster('mizupyon', {level: 3}); App.state.owned('mizupyon').status = 'poison'; window.__n = 0; window.__ev=[]; ['battle:start','battle:end'].forEach(function(n){App.events.on(n,function(p){window.__ev.push(n+':'+JSON.stringify(p))})}); 'ok'" },
+  { "eval": "window.__r = null; App.battle.startWild('kaenryu', 40).then(function(r){ window.__r = r; }); 'started'" },
+  { "eval": "BattleTest.autoplay({ command: function(s){ return s.turn === 0 ? 'party' : 'fight'; }, party: 1, stopAt: 'party' }).then(function(x){ return x.log.join(' / '); })" },
+  { "wait": 200 },
+  { "shot": "l01-party-switch" },
+  { "eval": "BattleTest.autoplay({ command: 'fight', party: 1, stopAt: 'party' }).then(function(x){ return x.log.slice(-6).join(' / '); })" },
+  { "wait": 200 },
+  { "shot": "l02-party-forced" },
+  { "key": "KeyX" },
+  { "wait": 200 },
+  { "eval": "App.battle.debugState().phase" },
+  { "eval": "window.__ap = null; BattleTest.autoplay({ command: 'fight' }).then(function(x){ window.__ap = x; }); 'go'" },
+  { "waitFor": "window.__r !== null && window.__ap !== null", "timeout": 60000 },
+  { "eval": "window.__ap.log.slice(-8).join(' / ')" },
+  { "eval": "JSON.stringify({ result: window.__r, hp: App.state.party().map(function(m){return m.speciesId+':'+m.hp+':'+m.status}), stats: App.state.data.stats, locked: App.main.isTabLocked(), ev: window.__ev })" }
+]

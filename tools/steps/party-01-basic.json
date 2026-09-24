@@ -1,0 +1,16 @@
+[
+  {"goto": "index.html"},
+  {"clearStorage": true},
+  {"goto": "index.html?autostart=1&tab=party"},
+  {"waitFor": "window.App && App.ready", "timeout": 8000},
+  {"wait": 300},
+  {"eval": "JSON.stringify({owned: App.state.ownedCount(), empty: !document.querySelector('.pt-empty').hidden, layoutHidden: document.querySelector('.pt-layout').hidden})"},
+  {"shot": "01-empty"},
+  {"eval": "(function(){ const ids=['hinokon','mizupyon','happamaru','chunpi','kamadon','raigarou','morinonushi','kaenryu','raimeiou','kokuyouryu','yurari']; ids.forEach((id,i)=>App.state.addMonster(id,{level: 5 + i*3})); App.monster.addExp(App.state.owned('hinokon'), 20000); App.state.owned('mizupyon').hp = 0; App.state.owned('chunpi').status='poison'; App.state.owned('kamadon').hp = 3; App.state.addMonster('raimeiou'); App.state.addMonster('raimeiou'); App.state.save(); App.events.emit('monster:updated',{speciesId:'hinokon'}); return JSON.stringify({owned: App.state.ownedCount(), party: App.state.partyIds(), hinokonLv: App.state.owned('hinokon').level, newMoves: App.partyTab.newMoves(App.state.owned('hinokon'))}); })()"},
+  {"wait": 300},
+  {"eval": "JSON.stringify({slots: document.querySelectorAll('.pt-slot:not(.is-empty)').length, box: document.querySelectorAll('.pt-grid .mcard').length, detail: document.querySelector('.pt-d-name').textContent, badge: document.querySelector('#tabbar [data-tab=party] .tab-badge').textContent})"},
+  {"shot": "02-filled"},
+  {"eval": "document.querySelector('.pt-grid .mcard[data-species=raimeiou]').click(); document.querySelector('.pt-d-name').textContent"},
+  {"wait": 200},
+  {"shot": "03-select-ur"}
+]

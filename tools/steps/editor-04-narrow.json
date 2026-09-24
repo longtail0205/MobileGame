@@ -1,0 +1,9 @@
+[
+  {"goto": "editor.html?start=file&section=monsters"},
+  {"waitFor": "window.App && App.editor && App.editor.ready", "timeout": 8000},
+  {"wait": 300},
+  {"shot": "17-narrow-monsters"},
+  {"eval": "App.editor.showSection('maps'); document.documentElement.scrollWidth + 'x' + window.innerWidth"},
+  {"wait": 300},
+  {"shot": "18-narrow-maps"}
+]

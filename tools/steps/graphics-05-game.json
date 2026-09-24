@@ -1,0 +1,9 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && window.App.ready", "timeout": 10000 },
+  { "eval": "typeof App.tiles.draw + ',' + typeof App.tiles.drawOverlay + ',' + typeof App.tiles.isAnimated + ' anim(W)=' + App.tiles.isAnimated('W') + ' anim(.)=' + App.tiles.isAnimated('.') + ' anim(zz)=' + App.tiles.isAnimated('zz')" },
+  { "eval": "(function(){ const cv=document.createElement('canvas'); cv.width=240; cv.height=160; const ctx=cv.getContext('2d'); const m=GameData.maps.town1; const rows=m.tiles; const at=(x,y)=> (y>=0&&y<rows.length&&x>=0&&x<rows[0].length)?rows[y][x]:m.border; const t0=performance.now(); let n=0; for(let fr=0; fr<300; fr++){ const ox=(fr%16)-8, oy=0; for(let ty=-1; ty<11; ty++) for(let tx=-1; tx<16; tx++){ const x=tx+ox, y=ty; App.tiles.draw(ctx, at(x,y), tx*16, ty*16, fr*16, (dx,dy)=>at(x+dx,y+dy)); n++; } } const dt=performance.now()-t0; return 'draws='+n+' total='+dt.toFixed(1)+'ms perFrame='+(dt/300).toFixed(3)+'ms '+JSON.stringify(App.tiles.stats()); })()" },
+  { "eval": "(function(){ const cv=document.createElement('canvas'); cv.width=16; cv.height=16; const ctx=cv.getContext('2d'); App.tiles.draw(ctx,'zz',0,0,0,null); App.tiles.draw(ctx,undefined,0,0,0); App.tiles.drawOverlay(ctx,',',0,0,0); App.tiles.drawOverlay(ctx,'.',0,0,0); App.tiles.draw(ctx,'W',0,0,-500,()=>{throw new Error('x')}); return 'edge cases ok'; })()" }
+]

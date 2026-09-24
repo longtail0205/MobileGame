@@ -1,0 +1,5 @@
+[
+  { "goto": "tools/gfx-preview.html?only=none" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "eval": "(async function(){ const c=document.createElement('canvas'); c.width=16; c.height=16; const x=c.getContext('2d'); x.fillStyle='#ff0000'; x.fillRect(0,0,16,16); x.fillStyle='#0000ff'; x.fillRect(0,9,16,7); const src=c.toDataURL(); GameData.tiles[','] = Object.assign({}, GameData.tiles[','], { image: src }); const out=document.createElement('canvas'); out.width=32; out.height=16; const o=out.getContext('2d'); App.tiles.draw(o, ',', 0, 0, 0, null); const before=Array.from(o.getImageData(2,2,1,1).data).join(','); await App.sprites.loadImage(src); o.clearRect(0,0,32,16); App.tiles.draw(o, ',', 0, 0, 0, null); App.tiles.drawOverlay(o, ',', 16, 0, 0); const after=Array.from(o.getImageData(2,2,1,1).data).join(','); const ovTop=o.getImageData(18,4,1,1).data[3]; const ovBot=Array.from(o.getImageData(18,12,1,1).data).join(','); return 'before(auto)='+before+' after(image)='+after+' overlayTopAlpha='+ovTop+' overlayBottom='+ovBot+' anim='+App.tiles.isAnimated(','); })()" }
+]

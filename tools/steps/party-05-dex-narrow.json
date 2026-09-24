@@ -1,0 +1,18 @@
+[
+  {"goto": "index.html"},
+  {"clearStorage": true},
+  {"goto": "index.html?autostart=1&tab=dex"},
+  {"waitFor": "window.App && App.ready", "timeout": 8000},
+  {"eval": "(function(){ ['hinokon','happamaru','kaenryu','raimeiou','kokuyouryu','yurari'].forEach((id,i)=>App.state.addMonster(id,{level: 5 + i*5})); ['mizupyon','chunpi','shione','aquaroa','tatsumaru'].forEach(id=>App.state.markSeen(id)); return 'scrollW=' + document.documentElement.scrollWidth + ' innerW=' + window.innerWidth; })()"},
+  {"wait": 300},
+  {"shot": "40-dex-narrow-top"},
+  {"eval": "(function(){ document.querySelector('.dx-grid').scrollIntoView(); return 'scrollW=' + document.documentElement.scrollWidth; })()"},
+  {"wait": 200},
+  {"shot": "41-dex-narrow-grid"},
+  {"eval": "(function(){ document.querySelector('.dx-card[data-species=kaenryu]').click(); return 'open'; })()"},
+  {"wait": 400},
+  {"shot": "42-dex-narrow-detail"},
+  {"eval": "(function(){ const b=document.querySelector('.dx-modal .modal-body'); b.scrollTop = 520; return 'bodyScrollH=' + b.scrollHeight; })()"},
+  {"wait": 200},
+  {"shot": "43-dex-narrow-detail2"}
+]

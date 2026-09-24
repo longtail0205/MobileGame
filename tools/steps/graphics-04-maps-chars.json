@@ -1,0 +1,13 @@
+[
+  { "goto": "tools/gfx-preview.html?only=maps&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "shot": "10-gamedata-maps" },
+  { "goto": "tools/gfx-preview.html?only=chars&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "wait": 300 },
+  { "shot": "11-chars" },
+  { "goto": "tools/gfx-preview.html?only=mons&t=0" },
+  { "waitFor": "window.__gfxReady", "timeout": 8000 },
+  { "wait": 300 },
+  { "shot": "12-mons" }
+]
