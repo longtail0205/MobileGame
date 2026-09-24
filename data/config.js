@@ -5,7 +5,7 @@
 window.GameData = window.GameData || {};
 
 GameData.config = {
-  title: 'ガチャモン',
+  title: 'FEVER BATTLE',
   subtitle: '',
   version: '1.0.0',
 
