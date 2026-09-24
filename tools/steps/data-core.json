@@ -1,0 +1,9 @@
+[
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && window.App.data && window.App.monster", "timeout": 8000 },
+  { "eval": "JSON.stringify(App.data.validate())" },
+  { "eval": "(function () { const bad = []; const rows = []; App.data.monsters().forEach((d) => { [5, 30, 50].forEach((lv) => { const inst = App.monster.create(d.id, lv); const st = App.monster.stats(inst); const atk = inst.moves.filter((m) => App.data.move(m.id).category !== 'status').length; if (!inst.moves.length || atk === 0 || !(inst.hp > 0) || inst.hp !== st.hp) bad.push(d.id + '@' + lv); if (lv === 5) rows.push(d.no + ' ' + d.name + ' ' + d.rarity + ' HP' + st.hp + ' A' + st.atk + ' ' + inst.moves.map((m) => App.data.move(m.id).name).join('/')); }); }); return JSON.stringify({ bad: bad, lv5: rows }); })()" },
+  { "eval": "JSON.stringify({ fireVsGrassSteel: App.data.typeEffect('fire', ['grass', 'steel']), groundVsFlying: App.data.typeEffect('ground', ['flying']), waterVsFireRock: App.data.typeEffect('water', ['fire', 'rock']), normalVsGhost: App.data.typeEffect('normal', ['ghost']) })" },
+  { "eval": "JSON.stringify(App.data.monsters().map((d) => ({ id: d.id, pts5: App.monster.wildPoints(App.monster.create(d.id, 5)), exp5: App.monster.expYield(App.monster.create(d.id, 5), false) })).filter((x, i) => i % 6 === 0))" }
+]

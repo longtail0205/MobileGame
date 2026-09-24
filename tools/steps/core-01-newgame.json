@@ -1,0 +1,18 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html" },
+  { "waitFor": "window.App && App.booted", "timeout": 8000 },
+  { "wait": 800 },
+  { "eval": "JSON.stringify({ready: App.ready, newGame: App.state.isNewGame(), modal: App.ui.isModalOpen(), tab: App.main.currentTab(), title: document.querySelector('.modal-title') && document.querySelector('.modal-title').textContent})" },
+  { "shot": "01-newgame-modal" },
+  { "eval": "document.querySelector('.modal input').value = 'テスト'; 'ok'" },
+  { "key": "Enter" },
+  { "wait": 900 },
+  { "eval": "JSON.stringify({name: App.state.data.player.name, modal: App.ui.isModalOpen(), title: document.querySelector('.modal-title') && document.querySelector('.modal-title').textContent, pos: App.state.data.player})" },
+  { "shot": "02-gift-modal" },
+  { "click": ".modal-footer .btn" },
+  { "wait": 700 },
+  { "eval": "JSON.stringify({ready: App.ready, tab: App.main.currentTab(), free: App.state.freePulls(), badge: document.querySelector('[data-tab=gacha] .tab-badge').textContent})" },
+  { "shot": "03-after-newgame" }
+]

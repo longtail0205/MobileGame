@@ -1,0 +1,14 @@
+[
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "AudioPreview.renderAll(6).then(function(rs){ return rs.map(function(r){ return [r.kind, r.name, r.ok ? 'ok' : 'NG ' + r.error, 'peak=' + r.peak, 'rms=' + r.rms, 'act=' + r.activeRatio].join(' '); }).join(' ;; '); })" },
+  { "eval": "(function(){ document.querySelector('#bgm').scrollIntoView(); return 'scrolled'; })()" },
+  { "wait": 300 },
+  { "shot": "03-rolls-a" },
+  { "eval": "(function(){ document.querySelector('.bgm[data-name=gym]').scrollIntoView(); return 'scrolled'; })()" },
+  { "wait": 300 },
+  { "shot": "03-rolls-b" },
+  { "eval": "(function(){ document.querySelector('.bgm[data-name=battleBoss]').scrollIntoView(); return 'scrolled'; })()" },
+  { "wait": 300 },
+  { "shot": "03-rolls-c" }
+]

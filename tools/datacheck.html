@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ガチャモン データチェック</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1e222b; --line: #333a48; --text: #e8eaf0; --sub: #9aa3b5;
+    --err: #ff6b6b; --warn: #ffc74a; --ok: #5ee08a; --info: #7ab8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 'Meiryo', 'MS Gothic', sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: #0d0f14; border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 16px; margin: 24px 0 8px; border-left: 4px solid var(--info); padding-left: 8px; }
+  main { padding: 8px 16px 48px; max-width: 1400px; }
+  nav a { color: var(--sub); margin-right: 10px; font-size: 12px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: bold; font-size: 13px; }
+  .pill.err { background: #4a1c1c; color: var(--err); }
+  .pill.warn { background: #4a3a14; color: var(--warn); }
+  .pill.ok { background: #16402a; color: var(--ok); }
+  .pill.info { background: #173150; color: var(--info); }
+  ul.msgs { margin: 4px 0; padding-left: 20px; }
+  ul.msgs li.err { color: var(--err); }
+  ul.msgs li.warn { color: var(--warn); }
+  ul.msgs li.info { color: var(--sub); }
+  table { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 12px; }
+  th, td { border: 1px solid var(--line); padding: 3px 6px; text-align: left; vertical-align: top; }
+  th { background: #262b36; position: sticky; top: 48px; z-index: 1; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .type { display: inline-block; min-width: 56px; text-align: center; padding: 0 6px; margin: 1px; border-radius: 4px; color: #fff; text-shadow: 0 1px 1px #000a; font-size: 11px; }
+  .rar { display: inline-block; min-width: 34px; text-align: center; padding: 0 4px; border-radius: 4px; color: #fff; font-weight: bold; font-size: 11px; text-shadow: 0 1px 1px #000a; }
+  .sw { display: inline-block; width: 14px; height: 14px; border: 1px solid #0008; vertical-align: middle; margin-right: 2px; }
+  .bar { display: inline-block; height: 6px; background: var(--info); vertical-align: middle; border-radius: 3px; }
+  .bad { color: var(--err); font-weight: bold; }
+  .dim { color: var(--sub); }
+  td.nw { white-space: nowrap; }
+  .chart td, .chart th { text-align: center; padding: 2px; min-width: 26px; font-size: 11px; }
+  .chart th { position: static; }
+  .c2 { background: #2f6b34; color: #d6ffd8; font-weight: bold; }
+  .c05 { background: #6b2f2f; color: #ffd6d6; }
+  .c0 { background: #111; color: #888; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .banner-head { padding: 6px 10px; border-radius: 6px; color: #fff; font-weight: bold; text-shadow: 0 1px 2px #000; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ガチャモン データチェック</h1>
+  <div id="summary">チェック中…</div>
+  <nav>
+    <a href="#sec-msgs">結果</a><a href="#sec-other">他データ</a><a href="#sec-monsters">モンスター</a>
+    <a href="#sec-types">タイプ</a><a href="#sec-banners">ガチャ</a><a href="#sec-moves">わざ</a><a href="#sec-chart">相性表</a>
+  </nav>
+</header>
+<main id="out"></main>
+
+<!-- 検査対象のデータ（index.html と同じ順番） -->
+<script src="../data/config.js"></script>
+<script src="../data/tiles.js"></script>
+<script src="../data/types.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/monsters.js"></script>
+<script src="../data/gacha.js"></script>
+<script src="../data/trainers.js"></script>
+<script src="../data/maps.js"></script>
+
+<script>
+// =====================================================================
+// データチェッカー
+//   data/*.js を読み込んで 書き間違い・参照切れ・バランスの目安 を検査する。
+//   エラー = ゲームが正しく動かない可能性が高いもの（console.error）
+//   警告   = 動くが おすすめの範囲から外れているもの（console.warn）
+//   結果は window.DataCheck にも入る（テスト用）。
+// =====================================================================
+(function () {
+  'use strict';
+
+  // ---- 定数・目安 ---------------------------------------------------
+  const STD_TYPES = ['normal', 'fire', 'water', 'grass', 'electric', 'ice', 'fighting', 'poison', 'ground',
+    'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel'];
+  // 第3世代の相性表（参照用。types.js を変更した場合は差分を警告として表示する）
+  const GEN3_CHART = {
+    normal: { rock: 0.5, ghost: 0, steel: 0.5 },
+    fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+    water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
+    grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
+    electric: { water: 2, grass: 0.5, electric: 0.5, ground: 0, flying: 2, dragon: 0.5 },
+    ice: { fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 },
+    fighting: { normal: 2, ice: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 2, ghost: 0, dark: 2, steel: 2 },
+    poison: { grass: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0 },
+    ground: { fire: 2, grass: 0.5, electric: 2, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
+    flying: { grass: 2, electric: 0.5, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
+    psychic: { fighting: 2, poison: 2, psychic: 0.5, dark: 0, steel: 0.5 },
+    bug: { fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5 },
+    rock: { fire: 2, ice: 2, fighting: 0.5, ground: 0.5, flying: 2, bug: 2, steel: 0.5 },
+    ghost: { normal: 0, psychic: 2, ghost: 2, dark: 0.5, steel: 0.5 },
+    dragon: { dragon: 2, steel: 0.5 },
+    dark: { fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, steel: 0.5 },
+    steel: { fire: 0.5, water: 0.5, electric: 0.5, ice: 2, rock: 2, steel: 0.5 },
+  };
+  const CATEGORIES = ['physical', 'special', 'status'];
+  const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+  const STAGE_STATS = ['atk', 'def', 'spa', 'spd', 'spe', 'acc', 'eva'];
+  const STATUSES = ['poison', 'burn', 'paralyze', 'sleep', 'freeze'];
+  const EXP_GROUPS = ['fast', 'medium_fast', 'medium_slow', 'slow'];
+  const SHAPES = ['blob', 'biped', 'quadruped', 'bird', 'fish', 'serpent', 'insect', 'plant', 'ghost', 'dragon'];
+  const BST_RANGE = { N: [250, 330], R: [330, 400], SR: [400, 470], SSR: [470, 540], UR: [540, 610] };
+  const EXP_RANGE = { N: [50, 70], R: [80, 110], SR: [120, 160], SSR: [180, 220], UR: [250, 300] };
+  const EXPGROUP_BY_RARITY = {
+    N: ['fast', 'medium_fast'], R: ['medium_fast', 'medium_slow'], SR: ['medium_fast', 'medium_slow'],
+    SSR: ['slow', 'medium_slow'], UR: ['slow', 'medium_slow'],
+  };
+  const DESC_LEN = [40, 70];
+  const LEARNSET_LEN = [5, 9];
+  const MOVE_KEYS = ['name', 'type', 'category', 'power', 'accuracy', 'pp', 'priority', 'critStage', 'effects', 'desc'];
+  const MON_KEYS = ['id', 'no', 'name', 'rarity', 'types', 'baseStats', 'learnset', 'expGroup', 'baseExp', 'image',
+    'backImage', 'sprite', 'gacha', 'category', 'height', 'weight', 'desc'];
+  const EFFECT_KEYS = {
+    stat: ['kind', 'target', 'stat', 'stages', 'chance'],
+    status: ['kind', 'status', 'chance'],
+    heal: ['kind', 'ratio'],
+    drain: ['kind', 'ratio'],
+    recoil: ['kind', 'ratio'],
+    flinch: ['kind', 'chance'],
+    multihit: ['kind', 'min', 'max'],
+  };
+  const ID_RE = /^[a-z0-9_]+$/;
+  const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const isInt = (v) => Number.isInteger(v);
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  const isStr = (v) => typeof v === 'string';
+  const len = (s) => Array.from(s).length;
+  const unknownKeys = (obj, allowed) => Object.keys(obj).filter((k) => !allowed.includes(k));
+
+  // ===================================================================
+  // チェック本体: GameData を受け取り 結果を返す（DOM・console は触らない）
+  // ===================================================================
+  function runChecks(GD) {
+    const R = { errors: [], warnings: [], infos: [], other: [], stats: {}, extra: new Map() };
+    const err = (m) => R.errors.push(m);
+    const warn = (m) => R.warnings.push(m);
+    const info = (m) => R.infos.push(m);
+    const other = (m) => R.other.push(m);
+
+    const types = isObj(GD.types) ? GD.types : {};
+    const chart = isObj(GD.typeChart) ? GD.typeChart : {};
+    const moves = isObj(GD.moves) ? GD.moves : {};
+    const monsters = Array.isArray(GD.monsters) ? GD.monsters : [];
+    const rarities = isObj(GD.rarities) ? GD.rarities : {};
+    const rarityOrder = Array.isArray(GD.rarityOrder) ? GD.rarityOrder : [];
+    const gacha = isObj(GD.gacha) ? GD.gacha : {};
+    const typeIds = Object.keys(types);
+    const typeName = (t) => (types[t] && types[t].name) || t;
+
+    // ===================================================================
+    // 1. タイプ
+    // ===================================================================
+    function checkTypes() {
+      if (!isObj(GD.types)) { err('types.js: GameData.types が定義されていません'); return; }
+      STD_TYPES.forEach((t) => { if (!types[t]) warn(`types.js: 標準タイプ "${t}" がありません`); });
+      typeIds.forEach((t) => {
+        const d = types[t];
+        if (!ID_RE.test(t)) err(`types.js: タイプID "${t}" は英小文字・数字・_ のみにしてください`);
+        if (!isObj(d)) { err(`types.js: ${t} がオブジェクトではありません`); return; }
+        if (!isStr(d.name) || !d.name) err(`types.js: ${t}.name がありません`);
+        if (!isStr(d.color) || !HEX_RE.test(d.color)) err(`types.js: ${t}.color "${d.color}" は #RRGGBB 形式にしてください`);
+      });
+      if (!isObj(GD.typeChart)) { err('types.js: GameData.typeChart が定義されていません'); return; }
+      Object.keys(chart).forEach((atk) => {
+        if (!types[atk]) err(`typeChart: 攻撃側 "${atk}" は types に存在しません`);
+        const row = chart[atk];
+        if (!isObj(row)) { err(`typeChart.${atk} がオブジェクトではありません`); return; }
+        Object.keys(row).forEach((def) => {
+          const v = row[def];
+          if (!types[def]) err(`typeChart.${atk}: 防御側 "${def}" は types に存在しません`);
+          if (!isNum(v) || v < 0) err(`typeChart.${atk}.${def} = ${v} は 0 以上の数値にしてください`);
+          else if (v === 1) warn(`typeChart.${atk}.${def} = 1 は書かなくても 1 です（省略できます）`);
+          else if (![0, 0.5, 2].includes(v)) warn(`typeChart.${atk}.${def} = ${v}（ふつうは 0 / 0.5 / 2）`);
+        });
+      });
+      // 第3世代との差分
+      if (STD_TYPES.every((t) => types[t])) {
+        const diffs = [];
+        STD_TYPES.forEach((a) => STD_TYPES.forEach((d) => {
+          const exp = (GEN3_CHART[a] && GEN3_CHART[a][d] !== undefined) ? GEN3_CHART[a][d] : 1;
+          const act = (chart[a] && chart[a][d] !== undefined) ? chart[a][d] : 1;
+          if (exp !== act) diffs.push(`${typeName(a)}→${typeName(d)}: 標準 ${exp} / 現在 ${act}`);
+        }));
+        R.stats.chartDiffs = diffs.length;
+        if (diffs.length) warn(`typeChart: 第3世代の標準相性と ${diffs.length} か所ちがいます（意図した変更なら問題ありません）: ${diffs.join(' , ')}`);
+      }
+      let se = 0, nve = 0, imm = 0;
+      Object.values(chart).forEach((row) => isObj(row) && Object.values(row).forEach((v) => {
+        if (v === 2) se++; else if (v === 0.5) nve++; else if (v === 0) imm++;
+      }));
+      R.stats.chart = { superEffective: se, notVeryEffective: nve, immune: imm };
+      info(`typeChart: ばつぐん ${se} / いまひとつ ${nve} / こうかなし ${imm}`);
+    }
+
+    // ===================================================================
+    // 2. わざ
+    // ===================================================================
+    function checkEffect(where, e, cat) {
+      if (!isObj(e)) { err(`${where}: effects の要素がオブジェクトではありません`); return; }
+      const allowed = EFFECT_KEYS[e.kind];
+      if (!allowed) { err(`${where}: 不明な effects.kind "${e.kind}"（stat/status/heal/drain/recoil/flinch/multihit）`); return; }
+      const extra = unknownKeys(e, allowed);
+      if (extra.length) warn(`${where}: effects(${e.kind}) に不明な項目 ${extra.join(', ')}`);
+      const chanceOk = (c) => c === undefined || (isNum(c) && c >= 1 && c <= 100);
+      if (!chanceOk(e.chance)) err(`${where}: chance ${e.chance} は 1〜100 にしてください`);
+      const damaging = cat !== 'status';
+      switch (e.kind) {
+        case 'stat':
+          if (!['self', 'foe'].includes(e.target)) err(`${where}: stat.target "${e.target}" は 'self' か 'foe'`);
+          if (!STAGE_STATS.includes(e.stat)) err(`${where}: stat.stat "${e.stat}" は ${STAGE_STATS.join('/')}`);
+          if (!isInt(e.stages) || e.stages === 0 || Math.abs(e.stages) > 3) err(`${where}: stat.stages ${e.stages} は -3〜+3（0以外）の整数`);
+          if (e.target === 'self' && e.stages < 0 && cat === 'status') warn(`${where}: 変化わざで 自分の能力を さげる設定です`);
+          break;
+        case 'status':
+          if (!STATUSES.includes(e.status)) err(`${where}: status "${e.status}" は ${STATUSES.join('/')}`);
+          break;
+        case 'heal':
+          if (!isNum(e.ratio) || e.ratio <= 0 || e.ratio > 1) err(`${where}: heal.ratio ${e.ratio} は 0より大きく 1以下`);
+          break;
+        case 'drain':
+        case 'recoil':
+          if (!isNum(e.ratio) || e.ratio <= 0 || e.ratio > 1) err(`${where}: ${e.kind}.ratio ${e.ratio} は 0より大きく 1以下`);
+          if (!damaging) err(`${where}: ${e.kind} は ダメージを与えるわざにだけ 付けられます`);
+          break;
+        case 'flinch':
+          if (e.chance === undefined) warn(`${where}: flinch に chance がありません（100% ひるみ になります）`);
+          if (!damaging) err(`${where}: flinch は ダメージを与えるわざにだけ 付けられます`);
+          break;
+        case 'multihit':
+          if (!isInt(e.min) || !isInt(e.max) || e.min < 1 || e.max > 10 || e.min > e.max) err(`${where}: multihit の min/max (${e.min}/${e.max}) は 1〜10 の整数で min ≦ max`);
+          if (!damaging) err(`${where}: multihit は ダメージを与えるわざにだけ 付けられます`);
+          break;
+      }
+    }
+
+    function checkMoves() {
+      if (!isObj(GD.moves)) { err('moves.js: GameData.moves が定義されていません'); return; }
+      const names = {};
+      Object.keys(moves).forEach((id) => {
+        const m = moves[id];
+        const w = `moves.${id}`;
+        if (!ID_RE.test(id)) err(`${w}: わざID は英小文字・数字・_ のみ`);
+        if (!isObj(m)) { err(`${w}: オブジェクトではありません`); return; }
+        const extra = unknownKeys(m, MOVE_KEYS);
+        if (extra.length) warn(`${w}: 不明な項目 ${extra.join(', ')}`);
+        if (!isStr(m.name) || !m.name) err(`${w}: name がありません`);
+        else (names[m.name] = names[m.name] || []).push(id);
+        if (!types[m.type]) err(`${w}: type "${m.type}" は types に存在しません`);
+        if (!CATEGORIES.includes(m.category)) err(`${w}: category "${m.category}" は physical/special/status`);
+        if (!isNum(m.power) || m.power < 0) err(`${w}: power ${m.power} は 0 以上の数値`);
+        else if (m.category === 'status' && m.power !== 0) err(`${w}: へんかわざ（status）の power は 0 にしてください`);
+        else if (m.category !== 'status' && m.power <= 0) err(`${w}: こうげきわざの power が 0 です`);
+        if (!isNum(m.accuracy) || m.accuracy < 0 || m.accuracy > 100) err(`${w}: accuracy ${m.accuracy} は 0〜100（0=必中）`);
+        if (!isInt(m.pp) || m.pp < 1 || m.pp > 64) err(`${w}: pp ${m.pp} は 1〜64 の整数`);
+        if (m.priority !== undefined && (!isInt(m.priority) || m.priority < -7 || m.priority > 5)) err(`${w}: priority ${m.priority} は -7〜5 の整数`);
+        if (m.critStage !== undefined && (!isInt(m.critStage) || m.critStage < 0 || m.critStage > 3)) err(`${w}: critStage ${m.critStage} は 0〜3 の整数`);
+        if (m.effects !== undefined) {
+          if (!Array.isArray(m.effects)) err(`${w}: effects は配列にしてください`);
+          else m.effects.forEach((e, i) => checkEffect(`${w}.effects[${i}]`, e, m.category));
+        }
+        if (m.category === 'status' && (!Array.isArray(m.effects) || m.effects.length === 0)) warn(`${w}: へんかわざなのに effects がありません（何も起きません）`);
+        if (!isStr(m.desc) || !m.desc) warn(`${w}: desc（説明文）がありません`);
+      });
+      Object.keys(names).forEach((n) => { if (names[n].length > 1) warn(`moves: わざ名 "${n}" が重複しています（${names[n].join(', ')}）`); });
+
+      // タイプ別・分類別の数
+      const byType = {};
+      const byCat = { physical: 0, special: 0, status: 0 };
+      Object.values(moves).forEach((m) => {
+        if (!isObj(m)) return;
+        byType[m.type] = (byType[m.type] || 0) + 1;
+        if (byCat[m.category] !== undefined) byCat[m.category]++;
+      });
+      typeIds.forEach((t) => { if ((byType[t] || 0) < 2) warn(`moves: ${typeName(t)} タイプのわざが ${byType[t] || 0} 個しかありません（2個以上推奨）`); });
+      R.stats.moveCount = Object.keys(moves).length;
+      R.stats.movesByType = byType;
+      R.stats.movesByCategory = byCat;
+      info(`moves: ${R.stats.moveCount} 個（ぶつり ${byCat.physical} / とくしゅ ${byCat.special} / へんか ${byCat.status}）`);
+    }
+
+    // ===================================================================
+    // 3. モンスター
+    // ===================================================================
+    const isAttack = (id) => moves[id] && moves[id].category !== 'status' && moves[id].power > 0;
+    function startMoves(mon, level) {
+      // App.monster.create の既定（習得済みの最後の4つ）と同じ考え方
+      const list = [];
+      (Array.isArray(mon.learnset) ? mon.learnset : [])
+        .filter((e) => isObj(e) && e.lv <= level)
+        .slice().sort((a, b) => a.lv - b.lv)
+        .forEach((e) => { if (!list.includes(e.move)) list.push(e.move); });
+      return list.slice(-4);
+    }
+
+    function checkMonsters() {
+      if (!Array.isArray(GD.monsters)) { err('monsters.js: GameData.monsters が配列ではありません'); return; }
+      const ids = {}, nos = {}, names = {};
+      const startLevel = isInt(gacha.startLevel) ? gacha.startLevel : 5;
+      monsters.forEach((m, idx) => {
+        const w = `monsters[${idx}]` + (m && m.id ? `(${m.id})` : '');
+        if (!isObj(m)) { err(`${w}: オブジェクトではありません`); return; }
+        const extra = unknownKeys(m, MON_KEYS);
+        if (extra.length) warn(`${w}: 不明な項目 ${extra.join(', ')}`);
+        // id / no / name
+        if (!isStr(m.id) || !ID_RE.test(m.id)) err(`${w}: id "${m.id}" は英小文字・数字・_ のみ`);
+        else if (ids[m.id]) err(`${w}: id "${m.id}" が重複しています`);
+        else ids[m.id] = true;
+        if (!isInt(m.no) || m.no < 1) err(`${w}: no ${m.no} は 1 以上の整数`);
+        else if (nos[m.no]) err(`${w}: 図鑑No ${m.no} が ${nos[m.no]} と重複しています`);
+        else nos[m.no] = m.id;
+        if (!isStr(m.name) || !m.name) err(`${w}: name がありません`);
+        else { if (names[m.name]) warn(`${w}: 名前 "${m.name}" が ${names[m.name]} と重複しています`); names[m.name] = m.id; }
+        // rarity / types
+        if (!rarities[m.rarity]) err(`${w}: rarity "${m.rarity}" は rarities に存在しません`);
+        if (!Array.isArray(m.types) || m.types.length < 1 || m.types.length > 2) err(`${w}: types は 1〜2 個の配列`);
+        else {
+          m.types.forEach((t) => { if (!types[t]) err(`${w}: type "${t}" は types に存在しません`); });
+          if (m.types.length === 2 && m.types[0] === m.types[1]) err(`${w}: types に同じタイプが2つあります`);
+        }
+        // baseStats
+        let bst = 0;
+        if (!isObj(m.baseStats)) err(`${w}: baseStats がありません`);
+        else {
+          STATS.forEach((s) => {
+            const v = m.baseStats[s];
+            if (!isNum(v) || v <= 0) err(`${w}: baseStats.${s} = ${v} は 1 以上の数値`);
+            else { bst += v; if (v > 255) warn(`${w}: baseStats.${s} = ${v} は大きすぎます（255 以下推奨）`); }
+          });
+          const ex = unknownKeys(m.baseStats, STATS);
+          if (ex.length) warn(`${w}: baseStats に不明な項目 ${ex.join(', ')}`);
+          const rg = BST_RANGE[m.rarity];
+          if (rg && (bst < rg[0] || bst > rg[1])) warn(`${w}: 種族値合計 ${bst} は ${m.rarity} の目安 ${rg[0]}〜${rg[1]} の範囲外`);
+        }
+        R.extra.set(m, { bst, startMoves: [] });
+        // learnset
+        if (!Array.isArray(m.learnset) || m.learnset.length === 0) err(`${w}: learnset がありません`);
+        else {
+          let prev = 0, sorted = true;
+          const seen = {};
+          m.learnset.forEach((e, i) => {
+            if (!isObj(e)) { err(`${w}: learnset[${i}] がオブジェクトではありません`); return; }
+            if (!isInt(e.lv) || e.lv < 1 || e.lv > 100) err(`${w}: learnset[${i}].lv ${e.lv} は 1〜100 の整数`);
+            if (!moves[e.move]) err(`${w}: learnset[${i}] のわざ "${e.move}" は moves に存在しません`);
+            if (seen[e.move]) warn(`${w}: learnset にわざ "${e.move}" が2回あります`);
+            seen[e.move] = true;
+            if (e.lv < prev) sorted = false;
+            prev = e.lv;
+          });
+          if (!sorted) warn(`${w}: learnset がレベル順に並んでいません`);
+          if (!m.learnset.some((e) => isObj(e) && e.lv === 1)) err(`${w}: lv 1 のわざがありません`);
+          if (!m.learnset.some((e) => isObj(e) && e.lv === 1 && isAttack(e.move))) err(`${w}: lv 1 の こうげきわざ がありません（入手直後に戦えません）`);
+          if (m.learnset.length < LEARNSET_LEN[0] || m.learnset.length > LEARNSET_LEN[1]) warn(`${w}: learnset が ${m.learnset.length} 個（目安 ${LEARNSET_LEN[0]}〜${LEARNSET_LEN[1]} 個）`);
+          if (Array.isArray(m.types)) {
+            m.types.forEach((t) => {
+              if (!m.learnset.some((e) => isObj(e) && isAttack(e.move) && moves[e.move].type === t)) warn(`${w}: ${typeName(t)} タイプの こうげきわざ を覚えません`);
+            });
+          }
+          const sm = startMoves(m, startLevel);
+          R.extra.get(m).startMoves = sm;
+          if (!sm.some(isAttack)) err(`${w}: ガチャ入手時（Lv${startLevel}）に こうげきわざ がありません`);
+        }
+        // 経験値
+        if (m.expGroup !== undefined && !EXP_GROUPS.includes(m.expGroup)) err(`${w}: expGroup "${m.expGroup}" は ${EXP_GROUPS.join('/')}`);
+        if (EXPGROUP_BY_RARITY[m.rarity] && m.expGroup && !EXPGROUP_BY_RARITY[m.rarity].includes(m.expGroup)) warn(`${w}: expGroup "${m.expGroup}" は ${m.rarity} の目安（${EXPGROUP_BY_RARITY[m.rarity].join(' / ')}）外`);
+        if (!isNum(m.baseExp) || m.baseExp <= 0) err(`${w}: baseExp ${m.baseExp} は 1 以上の数値`);
+        else if (EXP_RANGE[m.rarity] && (m.baseExp < EXP_RANGE[m.rarity][0] || m.baseExp > EXP_RANGE[m.rarity][1])) warn(`${w}: baseExp ${m.baseExp} は ${m.rarity} の目安 ${EXP_RANGE[m.rarity].join('〜')} の範囲外`);
+        // 画像・スプライト
+        ['image', 'backImage'].forEach((k) => { if (m[k] !== undefined && !isStr(m[k])) err(`${w}: ${k} は文字列（空なら ''）`); });
+        if (m.sprite !== undefined) {
+          if (!isObj(m.sprite)) err(`${w}: sprite はオブジェクト`);
+          else {
+            if (m.sprite.shape !== undefined && !SHAPES.includes(m.sprite.shape)) err(`${w}: sprite.shape "${m.sprite.shape}" は ${SHAPES.join('/')}`);
+            if (m.sprite.colors !== undefined) {
+              if (!Array.isArray(m.sprite.colors) || m.sprite.colors.length !== 3) err(`${w}: sprite.colors は [メイン, サブ, アクセント] の3色`);
+              else m.sprite.colors.forEach((c, i) => { if (!isStr(c) || !HEX_RE.test(c)) err(`${w}: sprite.colors[${i}] "${c}" は #RRGGBB`); });
+            }
+            if (m.sprite.seed !== undefined && !isNum(m.sprite.seed)) err(`${w}: sprite.seed は数値`);
+            const ex = unknownKeys(m.sprite, ['shape', 'colors', 'seed']);
+            if (ex.length) warn(`${w}: sprite に不明な項目 ${ex.join(', ')}`);
+          }
+        } else if (!m.image) warn(`${w}: sprite も image もありません（自動生成まかせになります）`);
+        if (m.gacha !== undefined && typeof m.gacha !== 'boolean') err(`${w}: gacha は true / false`);
+        // 図鑑情報
+        if (m.category !== undefined && !isStr(m.category)) err(`${w}: category は文字列`);
+        ['height', 'weight'].forEach((k) => { if (m[k] !== undefined && (!isNum(m[k]) || m[k] <= 0)) warn(`${w}: ${k} ${m[k]} は 0 より大きい数値`); });
+        if (!isStr(m.desc) || !m.desc) warn(`${w}: desc（図鑑説明）がありません`);
+        else if (len(m.desc) < DESC_LEN[0] || len(m.desc) > DESC_LEN[1]) warn(`${w}: desc が ${len(m.desc)} 文字（目安 ${DESC_LEN[0]}〜${DESC_LEN[1]} 文字）`);
+      });
+
+      // 図鑑Noの抜け
+      const noList = monsters.map((m) => m && m.no).filter(isInt).sort((a, b) => a - b);
+      const missing = [];
+      for (let n = 1; n <= (noList[noList.length - 1] || 0); n++) if (!noList.includes(n)) missing.push(n);
+      if (missing.length) info(`monsters: 図鑑No に抜けがあります: ${missing.join(', ')}`);
+
+      // タイプ網羅
+      const typeUse = {};
+      monsters.forEach((m) => isObj(m) && Array.isArray(m.types) && m.types.forEach((t) => { typeUse[t] = (typeUse[t] || 0) + 1; }));
+      typeIds.forEach((t) => { if ((typeUse[t] || 0) < 2) warn(`monsters: ${typeName(t)} タイプのモンスターが ${typeUse[t] || 0} 体（2体以上推奨）`); });
+      R.stats.typeUse = typeUse;
+
+      // 分布
+      const byRarity = {}, byShape = {};
+      let single = 0, dual = 0;
+      monsters.forEach((m) => {
+        if (!isObj(m)) return;
+        byRarity[m.rarity] = (byRarity[m.rarity] || 0) + 1;
+        const sh = (m.sprite && m.sprite.shape) || '(自動)';
+        byShape[sh] = (byShape[sh] || 0) + 1;
+        if (Array.isArray(m.types)) { if (m.types.length === 1) single++; else dual++; }
+      });
+      R.stats.monsterCount = monsters.length;
+      R.stats.byRarity = byRarity;
+      R.stats.byShape = byShape;
+      R.stats.single = single;
+      R.stats.dual = dual;
+      info(`monsters: ${monsters.length} 体 / レア度 ${rarityOrder.map((r) => `${r}:${byRarity[r] || 0}`).join(' ')} / 単タイプ ${single} 複合 ${dual}`);
+      info(`monsters: 体型 ${Object.keys(byShape).map((k) => `${k}:${byShape[k]}`).join(' ')}`);
+
+      // 使われていないわざ
+      const used = {};
+      monsters.forEach((m) => isObj(m) && Array.isArray(m.learnset) && m.learnset.forEach((e) => { if (isObj(e)) used[e.move] = true; }));
+      const unused = Object.keys(moves).filter((id) => !used[id]);
+      R.stats.unusedMoves = unused;
+      if (unused.length) warn(`moves: どのモンスターも覚えないわざ ${unused.length} 個: ${unused.join(', ')}`);
+    }
+
+    // ===================================================================
+    // 4. レア度・ガチャ
+    // ===================================================================
+    function effectiveRates(b) {
+      const pool = poolOf(b);
+      const counts = {};
+      rarityOrder.forEach((r) => { counts[r] = pool.filter((m) => m.rarity === r).length; });
+      const raw = isObj(b.rates) ? b.rates : {};
+      let total = 0;
+      rarityOrder.forEach((r) => { if (counts[r] > 0) total += (raw[r] || 0); });
+      const eff = {};
+      rarityOrder.forEach((r) => { eff[r] = (counts[r] > 0 && total > 0) ? (raw[r] || 0) * 100 / total : 0; });
+      return { counts, eff, pool };
+    }
+    function poolOf(b) {
+      if (b.pool === null || b.pool === undefined) return monsters.filter((m) => isObj(m) && m.gacha !== false);
+      if (!Array.isArray(b.pool)) return [];
+      return b.pool.map((id) => monsters.find((m) => isObj(m) && m.id === id)).filter(Boolean);
+    }
+
+    function checkGacha() {
+      if (!isObj(GD.rarities)) { err('gacha.js: GameData.rarities が定義されていません'); return; }
+      Object.keys(rarities).forEach((r) => {
+        const d = rarities[r];
+        const w = `rarities.${r}`;
+        if (!isObj(d)) { err(`${w}: オブジェクトではありません`); return; }
+        if (!isStr(d.name) || !d.name) err(`${w}: name がありません`);
+        ['color', 'glow'].forEach((k) => { if (!isStr(d[k]) || !HEX_RE.test(d[k])) err(`${w}: ${k} "${d[k]}" は #RRGGBB`); });
+        if (!isInt(d.stars) || d.stars < 0) err(`${w}: stars は 0 以上の整数`);
+        if (!isNum(d.pointMult) || d.pointMult < 0) err(`${w}: pointMult は 0 以上の数値`);
+        if (!isInt(d.refund) || d.refund < 0) err(`${w}: refund は 0 以上の整数`);
+        if (d.rainbow !== undefined && typeof d.rainbow !== 'boolean') err(`${w}: rainbow は true / false`);
+        if (!rarityOrder.includes(r)) err(`gacha.js: rarityOrder に "${r}" がありません`);
+      });
+      if (!Array.isArray(GD.rarityOrder)) err('gacha.js: GameData.rarityOrder が配列ではありません');
+      rarityOrder.forEach((r, i) => {
+        if (!rarities[r]) err(`rarityOrder: "${r}" は rarities に存在しません`);
+        if (rarityOrder.indexOf(r) !== i) err(`rarityOrder: "${r}" が重複しています`);
+      });
+      if (!isObj(GD.gacha)) { err('gacha.js: GameData.gacha が定義されていません'); return; }
+      const g = gacha;
+      [['singleCost', 0], ['multiCost', 0], ['multiCount', 1], ['pityCount', 0], ['maxLimitBreak', 0]].forEach(([k, min]) => {
+        if (!isInt(g[k]) || g[k] < min) err(`gacha.${k} = ${g[k]} は ${min} 以上の整数`);
+      });
+      if (g.multiGuarantee !== null && !rarities[g.multiGuarantee]) err(`gacha.multiGuarantee "${g.multiGuarantee}" は レア度ID か null`);
+      if (g.pityCount > 0 && !rarities[g.pityRarity]) err(`gacha.pityRarity "${g.pityRarity}" は レア度ID`);
+      if (!isNum(g.limitBreakBonus) || g.limitBreakBonus < 0) err('gacha.limitBreakBonus は 0 以上の数値');
+      if (!isInt(g.startLevel) || g.startLevel < 1 || g.startLevel > 100) err('gacha.startLevel は 1〜100 の整数');
+      if (isInt(g.singleCost) && isInt(g.multiCost) && isInt(g.multiCount) && g.multiCost > g.singleCost * g.multiCount) warn('gacha: 10連が 単発×回数 より高くなっています');
+
+      if (!Array.isArray(g.banners) || g.banners.length === 0) { err('gacha.banners がありません'); return; }
+      const ids = {};
+      if (!g.banners.some((b) => isObj(b) && b.id === 'standard')) warn("gacha.banners: id 'standard' のバナーがありません");
+      R.stats.banners = [];
+      g.banners.forEach((b, i) => {
+        const w = `banners[${i}]` + (b && b.id ? `(${b.id})` : '');
+        if (!isObj(b)) { err(`${w}: オブジェクトではありません`); return; }
+        if (!isStr(b.id) || !ID_RE.test(b.id)) err(`${w}: id は英小文字・数字・_ のみ`);
+        else if (ids[b.id]) err(`${w}: id "${b.id}" が重複しています`);
+        else ids[b.id] = true;
+        if (!isStr(b.name) || !b.name) err(`${w}: name がありません`);
+        if (!isStr(b.desc)) warn(`${w}: desc がありません`);
+        // rates
+        if (!isObj(b.rates)) err(`${w}: rates がありません`);
+        else {
+          let sum = 0;
+          Object.keys(b.rates).forEach((r) => {
+            if (!rarities[r]) err(`${w}: rates の "${r}" は rarities に存在しません`);
+            const v = b.rates[r];
+            if (!isNum(v) || v < 0) err(`${w}: rates.${r} = ${v} は 0 以上の数値`);
+            else sum += v;
+          });
+          rarityOrder.forEach((r) => { if (b.rates[r] === undefined) warn(`${w}: rates に ${r} がありません（0% 扱い）`); });
+          if (Math.abs(sum - 100) > 1e-6) err(`${w}: rates の合計が ${sum}%（100% にしてください）`);
+        }
+        // pool
+        if (b.pool !== null && b.pool !== undefined) {
+          if (!Array.isArray(b.pool)) err(`${w}: pool は null か IDの配列`);
+          else b.pool.forEach((id) => {
+            const m = monsters.find((x) => isObj(x) && x.id === id);
+            if (!m) err(`${w}: pool の "${id}" は monsters に存在しません`);
+            else if (m.gacha === false) warn(`${w}: pool の "${id}" は gacha: false です`);
+          });
+        }
+        const { counts, eff, pool } = effectiveRates(b);
+        if (pool.length === 0) err(`${w}: 出現するモンスターが 0 体です`);
+        rarityOrder.forEach((r) => {
+          if (isObj(b.rates) && b.rates[r] > 0 && counts[r] === 0) warn(`${w}: ${r} の確率 ${b.rates[r]}% ですが 対象が 0 体です（ほかのレア度に振り分けられます）`);
+        });
+        // pickup
+        if (!Array.isArray(b.pickup)) err(`${w}: pickup は配列（なしなら []）`);
+        else b.pickup.forEach((id) => {
+          const m = monsters.find((x) => isObj(x) && x.id === id);
+          if (!m) err(`${w}: pickup の "${id}" は monsters に存在しません`);
+          else if (!pool.includes(m)) err(`${w}: pickup の "${id}" は このバナーの pool に入っていません`);
+        });
+        if (!isNum(b.pickupRate) || b.pickupRate < 0 || b.pickupRate > 1) err(`${w}: pickupRate は 0〜1`);
+        if (!Array.isArray(b.colors) || b.colors.length !== 2 || !b.colors.every((c) => isStr(c) && HEX_RE.test(c))) err(`${w}: colors は ['#RRGGBB', '#RRGGBB']`);
+        R.stats.banners.push({ id: b.id, counts, eff, total: pool.length, pickup: b.pickup });
+        info(`banner ${b.id}: 対象 ${pool.length} 体 (${rarityOrder.map((r) => `${r}:${counts[r]}`).join(' ')}) / 実効確率 ${rarityOrder.map((r) => `${r}:${+eff[r].toFixed(2)}%`).join(' ')}`);
+      });
+    }
+
+    // ===================================================================
+    // 5. 他担当データ（trainers.js / maps.js）からの参照（警告のみ）
+    // ===================================================================
+    function checkOthers() {
+      const monById = {};
+      monsters.forEach((m) => { if (isObj(m)) monById[m.id] = m; });
+      const trainers = isObj(GD.trainers) ? GD.trainers : {};
+      Object.keys(trainers).forEach((tid) => {
+        const t = trainers[tid];
+        if (!isObj(t) || !Array.isArray(t.party)) { other(`trainers.${tid}: party がありません`); return; }
+        t.party.forEach((p, i) => {
+          const w = `trainers.${tid}.party[${i}]`;
+          const m = monById[p && p.species];
+          if (!m) { other(`${w}: species "${p && p.species}" は monsters に存在しません`); return; }
+          if (!isInt(p.level) || p.level < 1 || p.level > 100) other(`${w}: level ${p.level} が不正です`);
+          if (Array.isArray(p.moves)) p.moves.forEach((mv) => {
+            if (!moves[mv]) other(`${w}: わざ "${mv}" は moves に存在しません`);
+            else if (!m.learnset.some((e) => e.move === mv && e.lv <= p.level)) other(`${w}: ${m.name} は Lv${p.level} で "${mv}" を覚えていません`);
+          });
+        });
+      });
+      const maps = isObj(GD.maps) ? GD.maps : {};
+      Object.keys(maps).forEach((mid) => {
+        const mp = maps[mid];
+        if (!isObj(mp)) return;
+        if (mp.encounters && Array.isArray(mp.encounters.table)) {
+          mp.encounters.table.forEach((e, i) => {
+            const w = `maps.${mid}.encounters.table[${i}]`;
+            if (!monById[e.species]) other(`${w}: species "${e.species}" は monsters に存在しません`);
+            if (!(e.min <= e.max)) other(`${w}: min ${e.min} > max ${e.max}`);
+          });
+        }
+        (Array.isArray(mp.npcs) ? mp.npcs : []).forEach((n) => {
+          if (n && n.trainer && !trainers[n.trainer]) other(`maps.${mid}.npcs(${n.id}): trainer "${n.trainer}" は trainers に存在しません`);
+        });
+      });
+    }
+
+    // ===================================================================
+    // 実行
+    // ===================================================================
+    const steps = [checkTypes, checkMoves, checkMonsters, checkGacha, checkOthers];
+    steps.forEach((fn) => {
+      try { fn(); } catch (e) { err(`チェッカー内部エラー (${fn.name}): ${e && e.message}`); }
+    });
+
+    return R;
+  }
+
+  // ===================================================================
+  // 自己テスト（datacheck.html?selftest=1）
+  //   わざと壊したデータを runChecks に渡し、チェッカーが検出できるか確かめる。
+  // ===================================================================
+  function selfTest(base) {
+    const clone = () => JSON.parse(JSON.stringify(base));
+    const cases = [
+      ['IDの重複', (d) => { d.monsters[1].id = d.monsters[0].id; }, 'errors', 'が重複しています'],
+      ['図鑑Noの重複', (d) => { d.monsters[1].no = d.monsters[0].no; }, 'errors', '図鑑No'],
+      ['存在しないわざ', (d) => { d.monsters[0].learnset.push({ lv: 99, move: 'nosuchmove' }); }, 'errors', '"nosuchmove" は moves に存在しません'],
+      ['lv1のこうげきわざなし', (d) => { d.monsters[0].learnset = d.monsters[0].learnset.filter((e) => e.lv !== 1 || d.moves[e.move].category === 'status'); }, 'errors', 'lv 1 の こうげきわざ'],
+      ['種族値合計が範囲外', (d) => { d.monsters[0].baseStats.hp = 250; }, 'warnings', '種族値合計'],
+      ['存在しないタイプ', (d) => { d.monsters[0].types = ['light']; }, 'errors', 'type "light"'],
+      ['相性表の不明タイプ', (d) => { d.typeChart.fire.light = 2; }, 'errors', '防御側 "light"'],
+      ['相性表の改変', (d) => { d.typeChart.fire.grass = 0.5; }, 'warnings', '第3世代'],
+      ['不明な効果', (d) => { d.moves.tackle.effects = [{ kind: 'confuse' }]; }, 'errors', '不明な effects.kind'],
+      ['stages が 0', (d) => { d.moves.growl.effects[0].stages = 0; }, 'errors', 'stages'],
+      ['へんかわざの威力', (d) => { d.moves.growl.power = 40; }, 'errors', 'power は 0'],
+      ['ガチャ確率の合計', (d) => { d.gacha.banners[0].rates.N = 49; }, 'errors', '合計'],
+      ['ピックアップの参照切れ', (d) => { d.gacha.banners[0].pickup = ['nosuchmon']; }, 'errors', 'pickup の "nosuchmon"'],
+      ['タイプ網羅', (d) => { d.monsters.forEach((m) => { m.types = m.types.filter((t) => t !== 'dragon'); if (!m.types.length) m.types = ['normal']; }); }, 'warnings', 'ドラゴン タイプのモンスター'],
+      ['不明な体型', (d) => { d.monsters[0].sprite.shape = 'robot'; }, 'errors', 'sprite.shape'],
+      ['色の書式', (d) => { d.monsters[0].sprite.colors = ['red', '#ffffff', '#000000']; }, 'errors', 'sprite.colors[0]'],
+      ['トレーナーの参照切れ', (d) => { d.trainers = { t: { party: [{ species: 'nosuchmon', level: 5 }] } }; }, 'other', '"nosuchmon"'],
+    ];
+    let failed = 0;
+    cases.forEach(([name, mutate, bucket, needle]) => {
+      let ok = false;
+      try {
+        const d = clone();
+        mutate(d);
+        ok = runChecks(d)[bucket].some((m) => m.includes(needle));
+      } catch (e) { ok = false; }
+      if (ok) console.log(`[selftest] OK   ${name}`);
+      else { failed++; console.error(`[selftest] FAIL ${name}（${bucket} に "${needle}" が出ませんでした）`); }
+    });
+    console.log(`SELFTEST RESULT: ${cases.length - failed}/${cases.length} passed`);
+    return failed === 0;
+  }
+
+  // ===================================================================
+  // 実行
+  // ===================================================================
+  const GD = window.GameData || {};
+  const R = runChecks(GD);
+  window.DataCheck = R;
+  R.infos.forEach((m) => console.log('[info] ' + m));
+  R.warnings.forEach((m) => console.warn('[warn] ' + m));
+  R.other.forEach((m) => console.warn('[他担当データ] ' + m));
+  R.errors.forEach((m) => console.error('[error] ' + m));
+  console.log(`DATACHECK RESULT: errors=${R.errors.length} warnings=${R.warnings.length} other=${R.other.length} ` +
+    `types=${Object.keys(GD.types || {}).length} moves=${Object.keys(GD.moves || {}).length} monsters=${(GD.monsters || []).length}`);
+  if (/[?&]selftest=1/.test(location.search)) R.selftestPassed = selfTest(GD);
+
+  // ===================================================================
+  // 画面表示
+  // ===================================================================
+  const types = isObj(GD.types) ? GD.types : {};
+  const chart = isObj(GD.typeChart) ? GD.typeChart : {};
+  const moves = isObj(GD.moves) ? GD.moves : {};
+  const monsters = Array.isArray(GD.monsters) ? GD.monsters : [];
+  const rarities = isObj(GD.rarities) ? GD.rarities : {};
+  const rarityOrder = Array.isArray(GD.rarityOrder) ? GD.rarityOrder : [];
+  const gacha = isObj(GD.gacha) ? GD.gacha : {};
+  const typeIds = Object.keys(types);
+  const typeName = (t) => (types[t] && types[t].name) || t;
+  const extra = (m) => R.extra.get(m) || { bst: 0, startMoves: [] };
+  const out = document.getElementById('out');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const typeBadge = (t) => `<span class="type" style="background:${esc((types[t] && types[t].color) || '#555')}">${esc(typeName(t))}</span>`;
+  const rarBadge = (r) => `<span class="rar" style="background:${esc((rarities[r] && rarities[r].color) || '#555')}">${esc(r)}</span>`;
+  const moveLabel = (id) => (moves[id] ? esc(moves[id].name) : `<span class="bad">${esc(id)}?</span>`);
+  let html = '';
+
+  document.getElementById('summary').innerHTML =
+    `<span class="pill ${R.errors.length ? 'err' : 'ok'}">エラー ${R.errors.length}</span> ` +
+    `<span class="pill ${R.warnings.length ? 'warn' : 'ok'}">警告 ${R.warnings.length}</span> ` +
+    `<span class="pill info">タイプ ${typeIds.length} / わざ ${Object.keys(moves).length} / モンスター ${monsters.length} / バナー ${(gacha.banners || []).length}</span>`;
+
+  const list = (arr, cls) => arr.length ? `<ul class="msgs">${arr.map((m) => `<li class="${cls}">${esc(m)}</li>`).join('')}</ul>` : '<p class="dim">なし</p>';
+  html += `<h2 id="sec-msgs">チェック結果</h2>`;
+  html += `<h3>エラー（${R.errors.length}）</h3>${list(R.errors, 'err')}`;
+  html += `<h3>警告（${R.warnings.length}）</h3>${list(R.warnings, 'warn')}`;
+  html += `<h3>情報</h3>${list(R.infos, 'info')}`;
+  html += `<h2 id="sec-other">他のデータ（trainers.js / maps.js）からの参照</h2>${list(R.other, 'warn')}`;
+
+  // モンスター一覧
+  html += `<h2 id="sec-monsters">モンスター一覧（${monsters.length}体）</h2><table><tr>
+    <th>No</th><th>ID</th><th>名前</th><th>レア</th><th>タイプ</th><th>HP</th><th>攻</th><th>防</th><th>特攻</th><th>特防</th><th>素早</th>
+    <th>合計</th><th>体型・色</th><th>経験</th><th>Lv5のわざ</th><th>覚えるわざ</th></tr>`;
+  monsters.slice().filter(isObj).sort((a, b) => a.no - b.no).forEach((m) => {
+    const bs = m.baseStats || {};
+    const rg = BST_RANGE[m.rarity];
+    const bstBad = rg && (extra(m).bst < rg[0] || extra(m).bst > rg[1]);
+    const sp = m.sprite || {};
+    html += `<tr><td class="num">${esc(m.no)}</td><td>${esc(m.id)}</td><td class="nw">${esc(m.name)}<br><span class="dim">${esc(m.category || '')}</span></td>
+      <td>${rarBadge(m.rarity)}</td><td>${(m.types || []).map(typeBadge).join('')}</td>
+      ${STATS.map((s) => `<td class="num">${esc(bs[s])}<br><span class="bar" style="width:${Math.round((bs[s] || 0) / 3)}px"></span></td>`).join('')}
+      <td class="num ${bstBad ? 'bad' : ''}">${extra(m).bst}</td>
+      <td>${esc(sp.shape || '-')}<br>${(sp.colors || []).map((c) => `<span class="sw" style="background:${esc(c)}"></span>`).join('')}</td>
+      <td class="dim">${esc(m.expGroup || 'medium_fast')}<br>${esc(m.baseExp)}</td>
+      <td class="nw">${extra(m).startMoves.map(moveLabel).join('<br>')}</td>
+      <td>${(m.learnset || []).map((e) => `<span class="dim">${esc(e.lv)}</span> ${moveLabel(e.move)}`).join(' / ')}</td></tr>`;
+  });
+  html += '</table>';
+
+  // タイプ別
+  html += `<h2 id="sec-types">タイプ別</h2><table><tr><th>タイプ</th><th>モンスター数</th><th>わざ数</th><th>モンスター</th></tr>`;
+  typeIds.forEach((t) => {
+    const mons = monsters.filter((m) => isObj(m) && Array.isArray(m.types) && m.types.includes(t));
+    html += `<tr><td>${typeBadge(t)}</td><td class="num">${mons.length}</td><td class="num">${(R.stats.movesByType || {})[t] || 0}</td>
+      <td>${mons.map((m) => `${rarBadge(m.rarity)} ${esc(m.name)}`).join('　')}</td></tr>`;
+  });
+  html += '</table>';
+
+  // バナー
+  html += `<h2 id="sec-banners">ガチャバナー</h2><div class="grid">`;
+  (gacha.banners || []).filter(isObj).forEach((b) => {
+    const st = (R.stats.banners || []).find((x) => x.id === b.id);
+    const cols = Array.isArray(b.colors) ? b.colors : ['#333', '#555'];
+    html += `<div class="card"><div class="banner-head" style="background:linear-gradient(135deg, ${esc(cols[0])}, ${esc(cols[1])})">${esc(b.name)}</div>
+      <div class="dim">${esc(b.id)} — ${esc(b.desc || '')}</div><table><tr><th>レア</th><th>設定</th><th>実効</th><th>対象数</th><th>ピックアップ</th></tr>`;
+    rarityOrder.forEach((r) => {
+      const pk = (b.pickup || []).map((id) => monsters.find((m) => isObj(m) && m.id === id)).filter((m) => m && m.rarity === r);
+      html += `<tr><td>${rarBadge(r)}</td><td class="num">${esc((b.rates || {})[r] || 0)}%</td>
+        <td class="num">${st ? (+st.eff[r].toFixed(2)) : '-'}%</td><td class="num">${st ? st.counts[r] : '-'}</td>
+        <td>${pk.map((m) => esc(m.name)).join(', ')}</td></tr>`;
+    });
+    html += '</table></div>';
+  });
+  html += '</div>';
+
+  // わざ一覧
+  html += `<h2 id="sec-moves">わざ一覧（${Object.keys(moves).length}個）</h2><table><tr>
+    <th>ID</th><th>名前</th><th>タイプ</th><th>分類</th><th>威力</th><th>命中</th><th>PP</th><th>優先</th><th>急所</th><th>効果</th><th>覚える数</th><th>説明</th></tr>`;
+  const learnCount = {};
+  monsters.forEach((m) => isObj(m) && Array.isArray(m.learnset) && m.learnset.forEach((e) => { if (isObj(e)) learnCount[e.move] = (learnCount[e.move] || 0) + 1; }));
+  const catJa = { physical: 'ぶつり', special: 'とくしゅ', status: 'へんか' };
+  const effText = (e) => {
+    if (!isObj(e)) return '?';
+    const c = e.chance !== undefined ? ` ${e.chance}%` : '';
+    switch (e.kind) {
+      case 'stat': return `${e.target === 'self' ? '自' : '敵'}${e.stat}${e.stages > 0 ? '+' : ''}${e.stages}${c}`;
+      case 'status': return `${e.status}${c}`;
+      case 'multihit': return `${e.min}-${e.max}回`;
+      case 'flinch': return `ひるみ${c}`;
+      default: return `${e.kind} ${e.ratio}`;
+    }
+  };
+  Object.keys(moves).forEach((id) => {
+    const m = moves[id];
+    if (!isObj(m)) return;
+    html += `<tr><td>${esc(id)}</td><td>${esc(m.name)}</td><td>${typeBadge(m.type)}</td><td>${esc(catJa[m.category] || m.category)}</td>
+      <td class="num">${esc(m.power)}</td><td class="num">${m.accuracy === 0 ? '必中' : esc(m.accuracy)}</td><td class="num">${esc(m.pp)}</td>
+      <td class="num">${esc(m.priority || '')}</td><td class="num">${esc(m.critStage || '')}</td>
+      <td>${(m.effects || []).map(effText).map(esc).join(', ')}</td>
+      <td class="num ${learnCount[id] ? '' : 'bad'}">${learnCount[id] || 0}</td><td class="dim">${esc(m.desc || '')}</td></tr>`;
+  });
+  html += '</table>';
+
+  // 相性表
+  html += `<h2 id="sec-chart">タイプ相性表（縦=わざのタイプ / 横=受けるタイプ）</h2><table class="chart"><tr><th></th>`;
+  typeIds.forEach((d) => { html += `<th>${esc(typeName(d).slice(0, 2))}</th>`; });
+  html += '</tr>';
+  typeIds.forEach((a) => {
+    html += `<tr><th>${typeBadge(a)}</th>`;
+    typeIds.forEach((d) => {
+      const v = (chart[a] && chart[a][d] !== undefined) ? chart[a][d] : 1;
+      const cls = v === 2 ? 'c2' : v === 0.5 ? 'c05' : v === 0 ? 'c0' : '';
+      html += `<td class="${cls}">${v === 1 ? '' : (v === 0.5 ? '½' : v)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+
+  out.innerHTML = html;
+})();
+</script>
+</body>
+</html>

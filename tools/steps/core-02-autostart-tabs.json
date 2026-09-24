@@ -1,0 +1,21 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && App.ready", "timeout": 8000 },
+  { "eval": "JSON.stringify({tab: App.main.currentTab(), name: App.state.data.player.name, modal: App.ui.isModalOpen(), scale: getComputedStyle(document.documentElement).getPropertyValue('--screen-scale'), layout: document.body.dataset.gbaLayout})" },
+  { "keys": ["Digit1"] },
+  { "wait": 400 },
+  { "eval": "JSON.stringify({tab: App.main.currentTab(), inputActive: App.input.isActive(), scale: getComputedStyle(document.documentElement).getPropertyValue('--screen-scale'), layout: document.body.dataset.gbaLayout, wrap: document.getElementById('screen-wrap').getBoundingClientRect().toJSON(), gba: document.getElementById('gba').getBoundingClientRect().toJSON(), vh: innerHeight, vw: innerWidth})" },
+  { "shot": "10-adventure" },
+  { "keys": ["Digit2"] }, { "wait": 300 }, { "eval": "App.main.currentTab() + ' active=' + App.input.isActive()" }, { "shot": "11-party" },
+  { "keys": ["Digit4"] }, { "wait": 300 }, { "eval": "App.main.currentTab()" },
+  { "keys": ["Digit5"] }, { "wait": 500 }, { "eval": "App.main.currentTab()" }, { "shot": "12-settings" },
+  { "click": "#tabbar [data-tab=gacha]" }, { "wait": 300 }, { "eval": "App.main.currentTab()" },
+  { "eval": "App.main.setTabLock(true, 'バトル中は きりかえ できません'); 'locked'" },
+  { "click": "#tabbar [data-tab=dex]" }, { "wait": 200 },
+  { "eval": "App.main.currentTab() + ' locked=' + App.main.isTabLocked()" },
+  { "shot": "13-locked" },
+  { "eval": "App.main.setTabLock(false); App.main.switchTab('dex')" },
+  { "eval": "App.main.currentTab()" }
+]

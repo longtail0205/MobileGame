@@ -1,0 +1,12 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && window.App.ready", "timeout": 10000 },
+  { "eval": "(window.__dataSpritePreview = function (from, to) { const old = document.getElementById('data-sprite-preview'); if (old) old.remove(); if (!App.sprites || !App.sprites.monsterSprite) return 'App.sprites は未実装です'; const box = document.createElement('div'); box.id = 'data-sprite-preview'; box.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#d8e8d0;overflow:auto;display:grid;grid-template-columns:repeat(8,1fr);gap:6px;padding:8px;font:13px sans-serif;color:#222;'; const list = App.data.monsters().slice(from, to); list.forEach((d) => { const s = App.sprites.monsterSprite(d.id, 'front'); const b = App.sprites.monsterSprite(d.id, 'back'); const c = document.createElement('div'); c.style.cssText = 'background:#f8f8f0;border-radius:8px;text-align:center;padding:4px;border:3px solid ' + App.data.rarity(d.rarity).color; c.innerHTML = '<img src=\"' + s.src + '\" style=\"width:128px;height:128px;image-rendering:pixelated;' + (s.flip ? 'transform:scaleX(-1);' : '') + '\"><img src=\"' + b.src + '\" style=\"width:48px;height:48px;image-rendering:pixelated;' + (b.flip ? 'transform:scaleX(-1);' : '') + '\"><br><b>' + d.no + ' ' + d.name + '</b><br>' + d.rarity + ' / ' + d.types.map((t) => App.data.type(t).name).join('・') + ' / ' + (d.sprite ? d.sprite.shape : ''); box.appendChild(c); }); document.body.appendChild(box); return 'rendered ' + list.length; })(0, 24)" },
+  { "wait": 600 },
+  { "shot": "sprites-1" },
+  { "eval": "window.__dataSpritePreview(24, 48)" },
+  { "wait": 600 },
+  { "shot": "sprites-2" }
+]

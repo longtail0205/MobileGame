@@ -1,0 +1,8 @@
+[
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "(function(){ var v = App.audio.validate(); return JSON.stringify({ ok: v.ok, errors: v.errors, warnings: v.warnings }); })()" },
+  { "eval": "JSON.stringify(App.audio.validate().bgm)" },
+  { "eval": "JSON.stringify(App.audio.validate().sfx)" },
+  { "shot": "01-preview" }
+]

@@ -1,0 +1,12 @@
+[
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "JSON.stringify(App.audio.parseNotes('C5 8, D5, E5 4, F5 2 | G5 4, A5 |').errors)" },
+  { "eval": "JSON.stringify(App.audio.parseNotes('H5 8, C9 4, C5 7, C5 4 C5 4 |').errors)" },
+  { "eval": "JSON.stringify(App.audio.parseNotes('[C5 8, D5 | E5 4').errors)" },
+  { "eval": "JSON.stringify(App.audio.parseNotes('k 4, x 4, s 4, h 4 |', { drum: true }).errors)" },
+  { "eval": "JSON.stringify(App.audio.parseNotes('$Foo 4, C5 4, D5 2 |').errors)" },
+  { "eval": "(function(){ var r = App.audio.parseNotes('[C5 8, D5]x4 | (C4 E4 G4) 2, r 4, C0 4 |'); return JSON.stringify({ n: r.events.length, ticks: r.ticks, errors: r.errors }); })()" },
+  { "eval": "(function(){ window.GameData.bgm = { title: { tempo: 999, loopBar: 5, tracks: { a: { wave: 'saw', notes: 'C5 1 |' }, b: { wave: 'sq25', notes: 'C5 1 | D5 1 |' }, c: { wave: 'sq25', notes: 'C1 1 |' }, d: { wave: 'tri', vol: 3, notes: 'C9 1 |' } } } }; window.GameData.sfx = { coin: { parts: [ { wave: 'sq25', freq: [0, 99999], dur: 9 }, { wave: 'noise', filter: 'notch', freq: 100 } ] } }; var v = App.audio.validate(); delete window.GameData.bgm; delete window.GameData.sfx; return JSON.stringify(v.errors, null, 1); })()" },
+  { "eval": "App.audio.validate().ok" }
+]

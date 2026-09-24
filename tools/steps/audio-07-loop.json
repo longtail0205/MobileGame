@@ -1,0 +1,5 @@
+[
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "(async function(){ var out = []; var names = ['victory', 'battleWild', 'cave']; for (var i = 0; i < names.length; i++) { var n = names[i]; var info = App.audio.inspect(n); var total = info.seconds + (info.seconds - info.loopTick / info.barTicks * 60 / info.tempo * info.beats) * 0.5; var r = await App.audio.renderOffline('bgm', n, total, { keepBuffer: true }); var d = r.buffer.getChannelData(0), sr = r.buffer.sampleRate; var seam = Math.floor((info.seconds + 0.01) * sr); function rms(a, b){ var s = 0; for (var k = a; k < b; k++) s += d[k] * d[k]; return Math.sqrt(s / Math.max(1, b - a)); } out.push(n + ': total=' + total.toFixed(1) + 's seam=' + info.seconds.toFixed(2) + 's rms(before)=' + rms(seam - sr, seam).toFixed(3) + ' rms(after)=' + rms(seam, seam + sr).toFixed(3) + ' rms(end)=' + rms(d.length - sr, d.length).toFixed(3) + ' nan=' + r.nan); } return out.join(' ;; '); })()" }
+]

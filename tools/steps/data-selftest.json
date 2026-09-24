@@ -1,0 +1,5 @@
+[
+  { "goto": "tools/datacheck.html?selftest=1" },
+  { "waitFor": "window.DataCheck && window.DataCheck.selftestPassed !== undefined", "timeout": 8000 },
+  { "eval": "window.DataCheck.selftestPassed === true ? 'SELFTEST PASSED' : (function () { throw new Error('selftest failed'); })()" }
+]

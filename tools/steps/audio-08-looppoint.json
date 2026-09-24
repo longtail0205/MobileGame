@@ -1,0 +1,5 @@
+[
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "(async function(){ window.GameData.bgm = { looptest: { tempo: 240, loopBar: 1, tracks: { a: { wave: 'sq50', vol: 0.5, gate: 1, env: [0.001, 0, 1, 0.01], notes: 'C5 1 | D5 1 | E5 1 |' } } } }; var r = await App.audio.renderOffline('bgm', 'looptest', 6, { keepBuffer: true }); delete window.GameData.bgm; var d = r.buffer.getChannelData(0), sr = r.buffer.sampleRate; var fr = []; for (var b = 0; b < 6; b++) { var a = Math.floor((b + 0.15) * sr), e = Math.floor((b + 0.85) * sr), z = 0; for (var k = a + 1; k < e; k++) if (d[k - 1] <= 0 && d[k] > 0) z++; fr.push(Math.round(z / ((e - a) / sr))); } var exp = [523, 587, 659, 587, 659, 587]; var ok = fr.every(function(f, i){ return Math.abs(f - exp[i]) < 8; }); return (ok ? 'PASS loop order C D E D E D: ' : 'FAIL: ') + fr.join(','); })()" }
+]

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1f66">
+  <title>FEVER BATTLE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/field.css">
+  <link rel="stylesheet" href="css/battle.css">
+  <link rel="stylesheet" href="css/gacha.css">
+  <link rel="stylesheet" href="css/party.css">
+  <link rel="stylesheet" href="css/dex.css">
+</head>
+<body>
+  <div id="app">
+    <!-- トップバー -->
+    <header id="topbar">
+      <div class="tb-logo">
+        <span id="tb-title" class="tb-title">FEVER BATTLE</span>
+        <span id="tb-sub" class="tb-sub"></span>
+      </div>
+      <div class="tb-right">
+        <button id="tb-free" class="tb-free" type="button" title="無料ガチャの残り回数" hidden>無料ガチャ<b>0</b></button>
+        <button id="tb-points" class="pt-pill" type="button" title="所持ポイント">
+          <span class="pt-gem" aria-hidden="true"></span>
+          <span class="pt-value">0</span>
+          <span class="pt-unit">pt</span>
+        </button>
+        <button id="tb-sound" class="tb-icon-btn" type="button" title="サウンド" aria-label="サウンド"></button>
+      </div>
+    </header>
+
+    <!-- タブバー -->
+    <nav id="tabbar" role="tablist" aria-label="メニュー">
+      <button class="tab-btn" type="button" role="tab" data-tab="adventure"><span class="tab-icon"></span><span class="tab-label">ぼうけん</span><span class="tab-badge" hidden></span></button>
+      <button class="tab-btn" type="button" role="tab" data-tab="party"><span class="tab-icon"></span><span class="tab-label">へんせい</span><span class="tab-badge" hidden></span></button>
+      <button class="tab-btn" type="button" role="tab" data-tab="gacha"><span class="tab-icon"></span><span class="tab-label">ガチャ</span><span class="tab-badge" hidden></span></button>
+      <button class="tab-btn" type="button" role="tab" data-tab="dex"><span class="tab-icon"></span><span class="tab-label">ずかん</span><span class="tab-badge" hidden></span></button>
+      <button class="tab-btn" type="button" role="tab" data-tab="settings"><span class="tab-icon"></span><span class="tab-label">その他</span><span class="tab-badge" hidden></span></button>
+    </nav>
+
+    <!-- タブパネル -->
+    <main id="tabs">
+      <section id="tab-adventure" class="tab-panel" data-tab="adventure" role="tabpanel" hidden>
+        <div id="gba" class="gba-wide">
+          <div id="screen-wrap">
+            <div id="screen">
+              <canvas id="field-canvas" width="240" height="160"></canvas>
+              <div id="field-layer"></div>
+              <div id="battle-layer" hidden></div>
+              <div id="dialog-layer"></div>
+              <div id="fx-layer"></div>
+            </div>
+          </div>
+          <div id="pad">
+            <div class="pad-left">
+              <div class="dpad">
+                <button type="button" class="dpad-btn dpad-up" data-action="up" tabindex="-1" aria-label="上"></button>
+                <button type="button" class="dpad-btn dpad-left" data-action="left" tabindex="-1" aria-label="左"></button>
+                <span class="dpad-center" aria-hidden="true"></span>
+                <button type="button" class="dpad-btn dpad-right" data-action="right" tabindex="-1" aria-label="右"></button>
+                <button type="button" class="dpad-btn dpad-down" data-action="down" tabindex="-1" aria-label="下"></button>
+              </div>
+              <div class="ss-buttons">
+                <button type="button" class="ss-btn" data-action="start" tabindex="-1" aria-label="START"><span>START</span></button>
+              </div>
+            </div>
+            <div class="pad-right">
+              <div class="ab-buttons">
+                <button type="button" class="ab-btn ab-b" data-action="b" tabindex="-1" aria-label="B">B</button>
+                <button type="button" class="ab-btn ab-a" data-action="a" tabindex="-1" aria-label="A">A</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="gba-hint" class="gba-hint">
+          <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> いどう</span>
+          <span><kbd>Z</kbd> A ボタン</span>
+          <span><kbd>X</kbd> B ボタン</span>
+          <span><kbd>X</kbd>+<kbd>→</kbd> はしる</span>
+          <span><kbd>C</kbd> START</span>
+          <span><kbd>1</kbd>〜<kbd>5</kbd> タブ</span>
+        </div>
+      </section>
+      <section id="tab-party" class="tab-panel" data-tab="party" role="tabpanel" hidden></section>
+      <section id="tab-gacha" class="tab-panel" data-tab="gacha" role="tabpanel" hidden></section>
+      <section id="tab-dex" class="tab-panel" data-tab="dex" role="tabpanel" hidden></section>
+      <section id="tab-settings" class="tab-panel" data-tab="settings" role="tabpanel" hidden></section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <noscript><p class="noscript">このゲームを あそぶには JavaScript を ゆうこうに してください。</p></noscript>
+
+  <script src="data/config.js"></script>
+  <script src="data/tiles.js"></script>
+  <script src="data/types.js"></script>
+  <script src="data/moves.js"></script>
+  <script src="data/monsters.js"></script>
+  <script src="data/gacha.js"></script>
+  <script src="data/trainers.js"></script>
+  <script src="data/maps.js"></script>
+  <script src="js/core/util.js"></script>
+  <script src="js/core/events.js"></script>
+  <script src="js/core/data.js"></script>
+  <script src="js/core/monster.js"></script>
+  <script src="js/core/state.js"></script>
+  <script src="js/core/input.js"></script>
+  <script src="js/core/audio.js"></script>
+  <script src="js/core/ui.js"></script>
+  <script src="js/core/dialog.js"></script>
+  <script src="js/gfx/sprites.js"></script>
+  <script src="js/gfx/tiles.js"></script>
+  <script src="js/field/field.js"></script>
+  <script src="js/battle/engine.js"></script>
+  <script src="js/battle/battle.js"></script>
+  <script src="js/gacha/gacha.js"></script>
+  <script src="js/tabs/gacha.js"></script>
+  <script src="js/tabs/party.js"></script>
+  <script src="js/tabs/dex.js"></script>
+  <script src="js/tabs/settings.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

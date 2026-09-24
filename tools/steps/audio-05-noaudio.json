@@ -1,0 +1,13 @@
+[
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "window.AudioContext = undefined; window.webkitAudioContext = undefined; App.audio.playBgm('title'); App.audio.play('confirm'); var u = App.audio.unlock(); JSON.stringify({ unlock: u, status: App.audio.status() })" },
+  { "key": "KeyZ" },
+  { "eval": "App.audio.playBgm('route'); App.audio.play('coin'); App.audio.setMuted(true); App.audio.setVolume(0.2); App.audio.stopBgm(); (App.audio.status().supported === false ? 'PASS no AudioContext -> silent, no exception ' : 'FAIL ') + JSON.stringify(App.audio.status())" },
+  { "goto": "tools/audio-preview.html" },
+  { "waitFor": "window.App && App.audio && window.AudioPreview", "timeout": 5000 },
+  { "eval": "window.AudioContext = function(){ throw new Error('boom'); }; App.audio.playBgm('cave'); var u = App.audio.unlock(); App.audio.play('hit'); App.audio.playBgm('gym'); (u === false ? 'PASS throwing AudioContext handled ' : 'FAIL ') + JSON.stringify(App.audio.status())" },
+  { "click": "#btn-unlock" },
+  { "click": "#sfx button" },
+  { "eval": "'still alive'" }
+]

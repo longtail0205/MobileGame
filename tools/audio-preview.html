@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ガチャモン サウンドプレビュー</title>
+<style>
+  :root {
+    --bg: #14161f; --panel: #1d2030; --panel2: #262a3d; --line: #353a52; --text: #e8eaf2; --dim: #9aa0b8;
+    --accent: #ffcc33; --ok: #4ade80; --err: #f87171; --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 'DotGothic16', 'MS Gothic', monospace; }
+  header { position: sticky; top: 0; z-index: 5; background: #0e1018ee; border-bottom: 2px solid var(--line); padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; color: var(--accent); letter-spacing: 1px; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 2px solid var(--line); border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: #3b3310; border-color: var(--accent); color: var(--accent); }
+  button.playing { background: #173a24; border-color: var(--ok); color: var(--ok); }
+  #status { color: var(--dim); font-size: 12px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+  section { background: var(--panel); border: 2px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--accent); }
+  .ok { color: var(--ok); } .err { color: var(--err); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul.msgs { margin: 6px 0 0; padding-left: 20px; max-height: 220px; overflow: auto; font-size: 12px; }
+  .sfx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .sfx-grid button { text-align: left; }
+  .sfx-grid small { display: block; color: var(--dim); font-size: 11px; }
+  .bgm { border-top: 1px dashed var(--line); padding: 10px 0; }
+  .bgm:first-of-type { border-top: 0; }
+  .bgm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .bgm-head b { font-size: 15px; min-width: 120px; }
+  .bgm-head .meta { color: var(--dim); font-size: 12px; }
+  canvas.roll { width: 100%; height: 150px; background: #0b0d14; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; display: block; }
+  canvas.wave { width: 100%; height: 50px; background: #0b0d14; border: 1px solid var(--line); border-radius: 4px; margin-top: 4px; display: none; }
+  .legend { font-size: 11px; color: var(--dim); display: flex; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
+  .hints { font-size: 11px; color: var(--dim); margin-top: 4px; }
+  table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; }
+  th { color: var(--dim); font-weight: normal; }
+  input[type=range] { width: 120px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>♪ ガチャモン サウンドプレビュー</h1>
+  <button id="btn-unlock" class="primary">音を有効にする</button>
+  <button id="btn-mute">ミュート: OFF</button>
+  <label>音量 <input id="vol" type="range" min="0" max="1" step="0.05" value="0.6"></label>
+  <button id="btn-stop">■ BGM停止</button>
+  <button id="btn-render-all">全データをオフライン合成して検証</button>
+  <span id="status"></span>
+</header>
+<main>
+  <section id="sec-validate"><h2>データ検証</h2><div id="validate"></div></section>
+  <section><h2>効果音（SFX）</h2><div class="sfx-grid" id="sfx"></div></section>
+  <section><h2>BGM</h2><div id="bgm"></div></section>
+  <section id="sec-render" hidden><h2>オフライン合成の結果</h2><div id="render"></div></section>
+</main>
+
+<script src="../data/config.js"></script>
+<script src="../js/core/events.js"></script>
+<script src="../js/core/audio.js"></script>
+<script>
+(function () {
+  'use strict';
+  const A = window.App.audio;
+  const $ = (s) => document.querySelector(s);
+  const COLORS = ['#ffd166', '#06d6a0', '#4cc9f0', '#ef476f', '#c77dff', '#f4a261'];
+  const DRUM_ROW = { k: 0, tl: 1, th: 2, s: 3, cl: 3, h: 4, o: 5, c: 6 };
+  const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteName = (m) => NOTE[m % 12] + (Math.floor(m / 12) - 1);
+  const SFX_LABEL = {
+    select: 'カーソル', confirm: '決定', cancel: 'キャンセル', bump: '壁ドン', door: 'ドア', encounter: 'エンカウント',
+    hit: 'ダメージ', hitSuper: 'ばつぐん', hitWeak: 'いまひとつ', miss: 'はずれ', faint: 'ひんし', levelup: 'レベルアップ',
+    heal: '回復', statUp: '能力アップ', statDown: '能力ダウン', win: '勝利', lose: '敗北', run: 'にげる', coin: 'ポイント',
+    error: 'エラー', trainerSpot: 'トレーナー発見', gachaRoll: 'ガチャ演出', gachaN: 'ガチャ N', gachaR: 'ガチャ R',
+    gachaSR: 'ガチャ SR', gachaSSR: 'ガチャ SSR', gachaUR: 'ガチャ UR',
+  };
+  const BGM_LABEL = {
+    title: 'タイトル', town: 'まち', route: 'どうろ', forest: 'もり', cave: 'どうくつ', gym: 'ジム',
+    battleWild: '野生バトル', battleTrainer: 'トレーナーバトル', battleBoss: 'ボスバトル', victory: '勝利', gacha: 'ガチャ',
+  };
+
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    for (const k in (attrs || {})) {
+      if (k === 'text') n.textContent = attrs[k];
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), attrs[k]);
+      else n.setAttribute(k, attrs[k]);
+    }
+    for (const c of kids) if (c != null) n.append(c);
+    return n;
+  }
+
+  // ---- 状態表示 ----
+  function refreshStatus() {
+    const s = A.status();
+    $('#status').textContent = 'ctx: ' + (s.ctxState || '未作成') + ' / BGM: ' + (s.bgm || '-') +
+      (s.playing && s.playing !== s.bgm ? '(' + s.playing + ')' : '') + ' / フェード中: ' + s.fading;
+    $('#btn-mute').textContent = 'ミュート: ' + (s.muted ? 'ON' : 'OFF');
+    $('#vol').value = s.volume;
+    document.querySelectorAll('[data-bgm]').forEach((b) => b.classList.toggle('playing', b.dataset.bgm === s.bgm));
+  }
+  setInterval(refreshStatus, 300);
+
+  // ---- 検証 ----
+  function showValidate() {
+    const v = A.validate();
+    const box = $('#validate');
+    box.innerHTML = '';
+    box.append(el('div', { class: v.ok ? 'ok' : 'err', text: v.ok ? '✓ エラーなし（BGM ' + Object.keys(v.bgm).length + '曲 / 効果音 ' + Object.keys(v.sfx).length + '種）' : '✗ エラー ' + v.errors.length + '件' }));
+    if (v.errors.length) box.append(el('ul', { class: 'msgs err' }, ...v.errors.map((e) => el('li', { text: e }))));
+    if (v.warnings.length) {
+      box.append(el('div', { class: 'warn', text: '警告 ' + v.warnings.length + '件' }));
+      box.append(el('ul', { class: 'msgs warn' }, ...v.warnings.map((e) => el('li', { text: e }))));
+    }
+    const tb = el('table');
+    tb.append(el('tr', null, ...['BGM', 'テンポ', '小節', 'ループ', '1周(秒)', 'トラック（波形:音数 音域）'].map((h) => el('th', { text: h }))));
+    for (const [n, b] of Object.entries(v.bgm)) {
+      tb.append(el('tr', null,
+        el('td', { text: n, class: b.ok ? '' : 'err' }), el('td', { text: b.tempo }), el('td', { text: b.bars }),
+        el('td', { text: (b.loopBar + 1) + '小節目〜 (' + b.loopBars + '小節)' }), el('td', { text: b.seconds }),
+        el('td', { text: Object.entries(b.tracks).map(([t, x]) => t + '(' + x.wave + ':' + x.notes + (x.range ? ' ' + x.range : '') + ')').join('  ') })));
+    }
+    box.append(tb);
+    return v;
+  }
+
+  // ---- 効果音 ----
+  function buildSfx() {
+    const grid = $('#sfx');
+    for (const n of A.list().sfx) {
+      grid.append(el('button', { onclick: () => { A.unlock(); A.play(n); } }, SFX_LABEL[n] || n, el('small', { text: n })));
+    }
+  }
+
+  // ---- 和音チェック（半音でぶつかる箇所のヒント） ----
+  function analyze(info) {
+    const hints = [];
+    const mel = info.tracks.filter((t) => !t.isDrum);
+    const step = info.tpq / 2;
+    for (let t = 0; t < info.totalTicks; t += step) {
+      const snd = [];
+      for (const tr of mel) {
+        for (const e of tr.events) {
+          if (e.t <= t && t < e.t + e.d) for (const m of (e.ms || [e.m])) snd.push({ tr: tr.name, m, start: e.t, d: e.d });
+          if (e.t > t) break;
+        }
+      }
+      for (let i = 0; i < snd.length; i++) {
+        for (let j = i + 1; j < snd.length; j++) {
+          const a = snd[i], b = snd[j];
+          if (a.tr === b.tr) continue;
+          if (Math.abs(a.m - b.m) % 12 !== 1) continue;
+          if (a.start !== t && b.start !== t) continue;
+          if (a.d < step || b.d < step) continue;
+          const bar = Math.floor(t / info.barTicks) + 1, beat = (t % info.barTicks) / info.tpq + 1;
+          hints.push(bar + '小節' + beat + '拍 ' + a.tr + ':' + noteName(a.m) + ' / ' + b.tr + ':' + noteName(b.m));
+        }
+      }
+    }
+    return hints;
+  }
+
+  // ---- ピアノロール ----
+  function drawRoll(cv, info) {
+    const dpr = 1;
+    const W = cv.width = Math.max(600, cv.clientWidth * dpr || 1100), H = cv.height = 150 * dpr;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#0b0d14';
+    g.fillRect(0, 0, W, H);
+    const drumH = 28;
+    let lo = 127, hi = 0;
+    for (const tr of info.tracks) if (!tr.isDrum && tr.range) { lo = Math.min(lo, tr.range[0]); hi = Math.max(hi, tr.range[1]); }
+    if (lo > hi) { lo = 48; hi = 84; }
+    lo -= 1; hi += 1;
+    const ph = (H - drumH - 4) / (hi - lo + 1);
+    const X = (t) => t / info.totalTicks * W;
+    const Y = (m) => (hi - m) * ph + 2;
+    // 小節線
+    for (let b = 0; b <= info.bars; b++) {
+      const x = Math.round(X(b * info.barTicks)) + 0.5;
+      g.strokeStyle = b * info.barTicks === info.loopTick && b > 0 ? '#ff5577' : '#262a3d';
+      g.lineWidth = b * info.barTicks === info.loopTick && b > 0 ? 2 : 1;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
+    }
+    // C の横線
+    g.fillStyle = '#1a1e2c';
+    for (let m = lo; m <= hi; m++) if (m % 12 === 0) g.fillRect(0, Y(m) + ph - 1, W, 1);
+    info.tracks.forEach((tr, i) => {
+      g.fillStyle = COLORS[i % COLORS.length];
+      for (const e of tr.events) {
+        const x = X(e.t), w = Math.max(1, X(e.t + e.d) - x - 1);
+        if (tr.isDrum) {
+          for (const d of e.dr) {
+            const row = DRUM_ROW[d] || 0;
+            g.fillRect(x, H - 4 - row * 3.5, Math.max(1.5, Math.min(w, 3)), 3);
+          }
+        } else if (e.ms) {
+          g.globalAlpha = 0.55;
+          for (const m of e.ms) g.fillRect(x, Y(m), w, Math.max(1.5, ph * 0.6));
+          g.globalAlpha = 1;
+        } else {
+          g.fillRect(x, Y(e.m), w, Math.max(2, ph - 0.5));
+        }
+      }
+    });
+  }
+
+  function drawWave(cv, buf) {
+    cv.style.display = 'block';
+    const W = cv.width = Math.max(600, cv.clientWidth || 1100), H = cv.height = 50;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#0b0d14'; g.fillRect(0, 0, W, H);
+    const d = buf.getChannelData(0);
+    const per = Math.max(1, Math.floor(d.length / W));
+    g.fillStyle = '#4cc9f0';
+    for (let x = 0; x < W; x++) {
+      let mn = 1, mx = -1;
+      for (let i = x * per; i < (x + 1) * per && i < d.length; i++) { if (d[i] < mn) mn = d[i]; if (d[i] > mx) mx = d[i]; }
+      if (mx < mn) continue;
+      g.fillRect(x, H / 2 - mx * H / 2, 1, Math.max(1, (mx - mn) * H / 2));
+    }
+  }
+
+  function buildBgm() {
+    const box = $('#bgm');
+    for (const n of A.list().bgm) {
+      const info = A.inspect(n);
+      const roll = el('canvas', { class: 'roll' });
+      const wave = el('canvas', { class: 'wave' });
+      const meta = el('span', { class: 'meta' });
+      const res = el('span', { class: 'meta' });
+      const hints = el('div', { class: 'hints' });
+      const card = el('div', { class: 'bgm', 'data-name': n },
+        el('div', { class: 'bgm-head' },
+          el('b', { text: (BGM_LABEL[n] || n) + ' ' }),
+          el('button', { 'data-bgm': n, onclick: () => { A.unlock(); A.playBgm(n); refreshStatus(); } }, '▶ ' + n),
+          el('button', { onclick: async () => {
+            const r = await A.renderOffline('bgm', n, 0, { keepBuffer: true });
+            if (r.buffer) drawWave(wave, r.buffer);
+            res.textContent = r.ok ? 'peak ' + r.peak + ' / rms ' + r.rms + ' / 鳴っている割合 ' + r.activeRatio : '合成失敗: ' + r.error;
+          } }, '波形'),
+          meta, res),
+        roll, wave,
+        el('div', { class: 'legend' }, ...(info ? info.tracks : []).map((tr, i) =>
+          el('span', null, el('i', { style: 'background:' + COLORS[i % COLORS.length] }), tr.name + ' (' + tr.wave + ')'))),
+        hints);
+      box.append(card);
+      if (info) {
+        meta.textContent = '♩=' + info.tempo + ' / ' + info.bars + '小節' + (info.loopTick ? '（' + (info.loopTick / info.barTicks + 1) + '小節目からループ）' : '') +
+          ' / 1周 ' + info.seconds.toFixed(1) + '秒';
+        requestAnimationFrame(() => drawRoll(roll, info));
+        const h = analyze(info);
+        hints.textContent = h.length ? '半音の衝突 ' + h.length + '箇所: ' + h.slice(0, 12).join(' , ') + (h.length > 12 ? ' …' : '') : '半音の衝突なし';
+      }
+    }
+  }
+
+  // ---- 全データのオフライン合成チェック ----
+  async function renderAll(seconds) {
+    const out = [];
+    for (const n of A.list().bgm) out.push(await A.renderOffline('bgm', n, seconds || 0));
+    for (const n of A.list().sfx) out.push(await A.renderOffline('sfx', n, 0));
+    const box = $('#render');
+    $('#sec-render').hidden = false;
+    box.innerHTML = '';
+    const tb = el('table');
+    tb.append(el('tr', null, ...['種類', '名前', '秒', 'peak', 'rms', '鳴っている割合', '判定'].map((h) => el('th', { text: h }))));
+    for (const r of out) {
+      const bad = !r.ok || r.peak < 0.02 || r.peak > 1.6 || r.activeRatio === 0;
+      tb.append(el('tr', null, el('td', { text: r.kind }), el('td', { text: r.name }), el('td', { text: r.seconds && r.seconds.toFixed ? r.seconds.toFixed(2) : '' }),
+        el('td', { text: r.peak }), el('td', { text: r.rms }), el('td', { text: r.activeRatio }),
+        el('td', { class: bad ? 'err' : 'ok', text: bad ? '要確認 ' + (r.error || '') : 'OK' })));
+    }
+    box.append(tb);
+    return out;
+  }
+
+  // ---- イベント ----
+  $('#btn-unlock').addEventListener('click', () => { A.unlock(); refreshStatus(); });
+  $('#btn-mute').addEventListener('click', () => { A.setMuted(!A.isMuted()); refreshStatus(); });
+  $('#vol').addEventListener('input', (e) => A.setVolume(Number(e.target.value)));
+  $('#btn-stop').addEventListener('click', () => { A.stopBgm(); refreshStatus(); });
+  $('#btn-render-all').addEventListener('click', () => renderAll());
+
+  window.AudioPreview = { renderAll, analyze, showValidate };
+  document.addEventListener('DOMContentLoaded', () => {
+    A.init();
+    showValidate();
+    buildSfx();
+    buildBgm();
+    refreshStatus();
+  });
+})();
+</script>
+</body>
+</html>

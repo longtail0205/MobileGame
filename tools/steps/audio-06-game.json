@@ -1,0 +1,19 @@
+[
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && App.ready", "timeout": 8000 },
+  { "eval": "JSON.stringify({ hasAudio: !!App.audio, status: App.audio.status() })" },
+  { "eval": "App.audio.playBgm('town'); App.audio.currentBgm()" },
+  { "key": "KeyX" },
+  { "wait": 300 },
+  { "eval": "(function(){ var s = App.audio.status(); return (s.ctxState === 'running' && s.playing === 'town' ? 'PASS game: unlocked & playing ' : 'FAIL ') + JSON.stringify(s); })()" },
+  { "click": "#tb-sound" },
+  { "eval": "(App.audio.isMuted() === !App.state.setting('sound') ? 'PASS topbar sound button synced: muted=' : 'FAIL muted=') + App.audio.isMuted()" },
+  { "click": "#tb-sound" },
+  { "eval": "(App.audio.isMuted() === !App.state.setting('sound') ? 'PASS synced again: muted=' : 'FAIL muted=') + App.audio.isMuted()" },
+  { "eval": "App.state.setSetting('volume', 0.3); App.audio.getVolume()" },
+  { "eval": "App.audio.setMuted(true); JSON.stringify({ stateSound: App.state.setting('sound'), muted: App.audio.isMuted() })" },
+  { "eval": "App.audio.setMuted(false); App.audio.setVolume(0.6); App.audio.play('confirm'); App.audio.playBgm('gacha'); JSON.stringify(App.audio.status())" },
+  { "wait": 800 },
+  { "shot": "06-game" }
+]
