@@ -1,0 +1,17 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "App.main.switchTab('adventure'); JSON.stringify(App.field.debug.state())" },
+  { "wait": 800 },
+  { "shot": "01-title" },
+  { "key": "KeyZ" },
+  { "wait": 600 },
+  { "eval": "JSON.stringify(App.field.debug.state())" },
+  { "shot": "02-room" },
+  { "key": "ArrowDown", "hold": 700 },
+  { "wait": 400 },
+  { "eval": "JSON.stringify(App.field.debug.state())" },
+  { "shot": "03-walked" }
+]

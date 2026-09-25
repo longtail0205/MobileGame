@@ -1,0 +1,10 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "Promise.all(['tools/steps/integration-helper.js','tools/steps/league-helper.js'].map(function(u){return new Promise(function(r){var s=document.createElement('script');s.src=u;s.onload=function(){r(u)};document.body.appendChild(s);});})).then(function(){return 'loaded'})" },
+  { "eval": "LT.unit()" },
+  { "eval": "JSON.stringify(LT.results.filter(function(r){return !r.ok}))" },
+  { "eval": "var v=App.data.validate(); JSON.stringify({errors: v.errors, warn: v.warnings.filter(function(w){return /バッジ|リーグ|require|limitBreak|respawn/.test(w)})})" }
+]

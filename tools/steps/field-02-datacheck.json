@@ -1,0 +1,10 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/steps/field-check.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "var v=App.data.validate(); 'validate errors=' + v.errors.length + ' warnings=' + v.warnings.length + ' ' + JSON.stringify(v.errors.concat(v.warnings))" },
+  { "eval": "var r=FieldCheck.run(); if (r.errors.length) console.error('[field-check] ' + r.errors.join(' | ')); JSON.stringify(r, null, 1)" }
+  ,{ "eval": "var bak=JSON.stringify(GameData.maps); GameData.maps.town1.warps[2].tx=0; GameData.maps.route1.pickups[0].x=0; GameData.maps.gym.npcs[1].x=0; var r2=FieldCheck.run(); GameData.maps=JSON.parse(bak); 'negative(expect 3+ errors): ' + r2.errors.length + ' ' + JSON.stringify(r2.errors)" }
+]

@@ -1,0 +1,18 @@
+[
+  {"goto": "editor.html"},
+  {"clearStorage": true},
+  {"goto": "editor.html"},
+  {"waitFor": "window.App && App.editor && App.editor.ready", "timeout": 8000},
+  {"eval": "App.editor.showSection('trainers'); 'ok'"},
+  {"wait": 300},
+  {"eval": "var sels=Array.from(document.querySelectorAll('select')); var bs=sels.find(function(s){return Array.from(s.options).some(function(o){return o.value==='wind'})}); var ls=sels.find(function(s){return Array.from(s.options).some(function(o){return o.textContent==='5 チャンピオン'})}); bs.value='spark'; bs.dispatchEvent(new Event('change',{bubbles:true})); ls.value='3'; ls.dispatchEvent(new Event('change',{bubbles:true})); var lb=document.querySelector('input[title^=\"limitBreak\"]'); lb.value='2'; lb.dispatchEvent(new Event('input',{bubbles:true})); 'set'"},
+  {"wait": 300},
+  {"eval": "var s=App.editor.generate('trainers.js'); JSON.stringify({badge:/badge: 'spark'/.test(s), league:/league: 3/.test(s), lb:/limitBreak: 2/.test(s), head:/badge :/.test(s) && /league:/.test(s)})"},
+  {"eval": "var s=App.editor.generate('maps.js'); JSON.stringify({rb:/requireBadges: n/.test(s), rt:/requireTrainer/.test(s), rs:/respawn …/.test(s)})"},
+  {"eval": "JSON.stringify(App.editor.selfTest())"},
+  {"eval": "var v=App.editor.validate(); JSON.stringify(v && (v.errors||v).slice ? (v.errors||[]).filter(function(m){return /バッジ|league|limitBreak|require/.test(m)}) : v)"},
+  {"shot": "l12-editor-trainer"},
+  {"eval": "App.editor.showSection('maps'); 'ok'"},
+  {"wait": 300},
+  {"eval": "Array.from(document.querySelectorAll('.ed-hint, .hint, small')).map(function(n){return n.textContent}).filter(function(t){return /requireBadges|respawn/.test(t)}).join(' || ').slice(0,400)"}
+]

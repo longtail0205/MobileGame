@@ -8,7 +8,7 @@
   Steps (JSON array, executed in order):
     { "goto": "index.html?x=1" }            relative to project root, or absolute URL
     { "wait": 500 }                          milliseconds
-    { "eval": "js expression" }              result printed; Promises are awaited
+    { "eval": "js expression", "timeout": 60000 }   result printed; Promises are awaited (timeout ms, default 20000)
     { "waitFor": "js expression", "timeout": 5000 }   poll until truthy
     { "key": "ArrowUp", "hold": 300 }        key down, hold ms, key up  (names: ArrowUp/Down/Left/Right, Enter, Escape, KeyZ, KeyX, Space, ...)
     { "keys": ["KeyZ","KeyZ"], "gap": 200 }  several taps
@@ -193,7 +193,7 @@ try {
       $r = Eval-Js "localStorage.clear(); 'cleared'"
       Write-Host "[$n] clearStorage -> $($r.text)"
     } elseif ($s.eval) {
-      $r = Eval-Js ([string]$s.eval)
+      $r = Eval-Js ([string]$s.eval) $(if ($s.timeout) { [int]$s.timeout } else { 20000 })
       Write-Host "[$n] eval: $($s.eval)"
       Write-Host "     => $($r.text)"
       if (-not $r.ok) { $script:hadError = $true }

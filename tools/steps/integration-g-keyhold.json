@@ -1,0 +1,18 @@
+[
+  {"goto": "index.html"},
+  {"clearStorage": true},
+  {"goto": "index.html?autostart=1"},
+  {"waitFor": "window.App && App.ready", "timeout": 15000},
+  {"eval": "Promise.all(['tools/steps/field-check.js','tools/steps/integration-helper.js'].map(function(u){return new Promise(function(r){var s=document.createElement('script');s.src=u;s.onload=function(){r(u)};document.body.appendChild(s);});})).then(function(){return 'loaded'})"},
+  {"eval": "App.gacha.pull('standard',1,{free:true}); App.state.setFlag('gachaGuideDone', true); App.main.switchTab('adventure'); 'ok'"},
+  {"wait": 400},
+  {"key": "KeyZ"},
+  {"wait": 800},
+  {"eval": "App.field.debug.teleport('town1', 5, 7, 'right'); IT.path('R2 L2')"},
+  {"eval": "window.__trace=[]; window.__tr=setInterval(function(){var s=App.field.debug.state(); var k=s.x+','+s.y+','+s.dir+(s.moving?'m':'')+(s.busy?'b':''); if(__trace[__trace.length-1]!==k) __trace.push(k);},16); IT.down('ArrowRight'); setTimeout(function(){ App.main.switchTab('party'); }, 200); setTimeout(function(){ IT.up('ArrowRight'); }, 500); new Promise(function(r){ setTimeout(function(){ App.main.switchTab('adventure'); setTimeout(function(){ r('trace ' + __trace.join(' ')); }, 1500); }, 900); })", "timeout": 10000},
+  {"eval": "IT.path('R1 L1')"},
+  {"eval": "window.__trace=[]; IT.down('ArrowRight'); setTimeout(function(){ App.main.switchTab('party'); }, 200); new Promise(function(r){ setTimeout(function(){ App.main.switchTab('adventure'); setTimeout(function(){ var a='back(still held) ' + __trace.join(' '); IT.up('ArrowRight'); setTimeout(function(){ r(a + ' || after up ' + __trace.join(' ')); }, 800); }, 1200); }, 600); })", "timeout": 10000},
+  {"eval": "IT.path('L1')"},
+  {"eval": "window.__trace=[]; IT.down('ArrowLeft'); new Promise(function(r){ setTimeout(function(){ window.dispatchEvent(new Event('blur')); }, 150); setTimeout(function(){ var a=__trace.join(' '); setTimeout(function(){ IT.up('ArrowLeft'); r('blur ' + a + ' | +1s ' + __trace.join(' ')); }, 1000); }, 300); })", "timeout": 10000},
+  {"eval": "clearInterval(__tr); IT.path('R1 L1')"}
+]

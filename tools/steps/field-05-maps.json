@@ -1,0 +1,20 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "App.main.switchTab('adventure'); App.field.debug.start(); 'ok'" },
+  { "wait": 500 },
+  { "eval": "App.field.debug.teleport('town1', 11, 9, 'down'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "30-town1" },
+  { "eval": "App.field.debug.teleport('town1_house', 5, 6, 'up'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "31-town1_house" },
+  { "eval": "App.field.debug.teleport('town1_center', 5, 5, 'up'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "32-town1_center" },
+  { "eval": "App.field.debug.teleport('town1_shop', 5, 6, 'up'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "33-town1_shop" },
+  { "eval": "App.field.debug.teleport('route1', 11, 8, 'down'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "34-route1" },
+  { "eval": "App.field.debug.teleport('forest', 14, 11, 'down'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "35-forest" },
+  { "eval": "App.field.debug.teleport('route2', 16, 9, 'right'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "36-route2" },
+  { "eval": "App.field.debug.teleport('town2', 14, 11, 'down'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "37-town2" },
+  { "eval": "App.field.debug.teleport('town2_center', 5, 5, 'up'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "38-town2_center" },
+  { "eval": "App.field.debug.teleport('town2_house', 5, 6, 'up'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "39-town2_house" },
+  { "eval": "App.field.debug.teleport('gym', 5, 8, 'up'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "40-gym" },
+  { "eval": "App.field.debug.teleport('cave', 14, 11, 'down'); App.field.debug.state().map" }, { "wait": 400 }, { "shot": "41-cave" }
+]

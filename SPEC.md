@@ -605,3 +605,86 @@ switchTab(id) / currentTab() / setTabLock(locked, reason) / isTabLocked() / setT
 - スクリーンショットは Read ツールで画像として確認できる。
 - テスト用にセーブを消すには `{"clearStorage": true}` → `{"goto": "index.html"}`。
 - `GameData.config.debug = true` のとき、その他タブにデバッグ機能（ポイント付与等）がある。
+
+## 10. 進化（2026-09-25 追加）
+
+### 10.1 方針（ユーザー決定済み）
+- 条件は **レベル**。バトルでレベルアップした後に「おや…？」演出で進化（B でキャンセル可）。キャンセル/未進化でも条件を満たしていれば **へんせい画面の「しんかさせる」ボタン** から進化できる。
+- 進化後の姿は **新規モンスター**として追加し、`gacha: false`（ガチャに出ない。育成でのみ入手）。
+- **同じ進化系統は1体扱い**。系統内のどれかを所持しているとき、系統内の別の種（進化前など）をガチャで引いたら、所持している個体の凸（凸MAXなら返還pt）になる。
+
+### 10.2 データ（data/monsters.js）
+進化前の定義に `evolution` を追加する（1段階につき1つ。分岐なし）:
+```js
+{ id: 'hinokon', ..., evolution: { to: 'hinoboa', level: 18 } }
+{ id: 'hinoboa', ..., rarity: 'N', gacha: false, evolution: { to: 'kaenboa', level: 34 } }  // 2段階目も同様
+```
+- 進化後の `rarity` は進化前と同じ（表示・返還ptの基準）。`gacha: false`。
+- 進化後の learnset は進化前のわざ＋新わざ（Lv60前後まで）。
+- 目安の種族値合計: N進化1段 370〜440 / N進化2段 460〜500 / R進化 450〜490（SSR/URの価値を崩さない）。
+- sprite は進化前と同じ shape・近い colors で「同じ系統」に見えるように。
+
+### 10.3 API 追加（core）
+```
+App.data.evolutionOf(id) → { to, level } | null
+App.data.preEvolutionOf(id) → id | null
+App.data.familyOf(id) → [rootId, ..., 最終形id]（進化順）
+App.data.familyRoot(id) → rootId
+App.monster.canEvolve(inst) → toId | null        // level >= evolution.level
+App.monster.learnableMoves(inst)                  // 系統の進化前の learnset も含める（lv ≤ 現レベル）
+App.state.ownedInFamily(id) → inst | null         // 系統内で所持している個体
+App.state.evolve(speciesId) → { from, to, inst } | null
+    コレクションのキーを from → to に付け替え（level/exp/limitBreak/nickname/moves/status/obtainedAt は引き継ぎ、
+    最大HPの増加分だけ現在HPも増やす）。party 内の ID も置換。dex.seen/owned に to を追加（from の owned は残す）。
+    イベント: collection:changed { speciesId: to, evolvedFrom: from }、party:changed、monster:updated、dex:changed
+App.state.addMonster(id)                          // ownedInFamily があればその個体を凸/返還（isNew:false）
+```
+validate(): evolution.to の参照切れ、自己参照・循環、level が 2〜maxLevel、進化先の rarity 不一致・gacha !== false は警告。
+
+### 10.4 担当ごとの変更
+- battle: 勝利後の経験値処理の後、`canEvolve` の個体ごとに進化演出（R/S風: 「おや…？ 〇〇の ようすが…！」→ 白く点滅しながら進化前/後のシルエットが交互 → 「おめでとう！ 〇〇は 〇〇に しんかした！」、B でキャンセル「……おや？ へんかが とまった！」）→ `App.state.evolve`。進化で新しく覚えられるわざがあれば通常の習得処理。
+- party: 詳細パネルに「しんかさせる（Lv〇〇で しんか）」ボタン（条件未達は無効表示）。進化演出は DOM で簡易版（または battle の演出関数を再利用）。
+- dex: 詳細モーダルに進化系統（アイコン → Lv〇〇 → アイコン）。gacha:false の種は「ガチャ: しんかで てにいれる」。
+- editor: モンスターフォームに evolution（進化先プルダウン＋Lv）。削除/ID変更時の参照チェックに evolution を含める。
+- field: 後半マップ（2ばんどうろ・洞窟など）の出現テーブルに進化後の種を低確率で追加してよい。
+
+## 11. バッジ・レベル上限・ポケモンリーグ（2026-09-25 追加）
+
+### 11.1 方針（ユーザー決定済み）
+- ジムは4つ → バッジ4つで ポケモンリーグ（四天王4人 → チャンピオン）。
+- レベル上限: `config.levelCaps = [20, 30, 35, 40, 50]`（index = バッジ数）。最大50。チャンピオン撃破後も50のまま。
+- 上限に達した個体は経験値が増えない（EXPバーは MAX 表示）。あふれた経験値は `overflowExpPerPoint` につき 1pt に変換（1日 `overflowDailyMax` pt まで）。
+- 追いつきボーナス: 上限との差（上限 − Lv）が `catchUpExp` の below 以上なら経験値 × mult（上から順に最初に合うもの）。
+- 四天王戦は **回復なしの5連戦**（四天王4人 → チャンピオン）。途中で負けたら四天王の1人目からやり直し（リーグの撃破記録をリセット）。
+- 仮決めのタイプ（後でユーザーがキャラを追加して調整する前提）:
+  ジム1 ひこう（既存カザミジム・リーダー フウカ。エースLv20に強化）/ ジム2 みず（エース30）/ ジム3 はがね（エース35）/ ジム4 でんき（エース40）
+  四天王 ゴースト（45）→ かくとう（46）→ こおり（47）→ あく（48）→ チャンピオン ドラゴン中心の混成（エース50、UR/SSR を含む）
+- ジムリーダーの手持ち: エース＝上限Lv、他は上限−2〜3。後半ほど手持ちが多い（ジム1 3体 → ジム4 5体、四天王 5体、チャンピオン 6体）。専門タイプの弱点を突くサブウェポンと能力上昇わざを持たせる（`moves` 指定）。必要なら `limitBreak` で強化。
+
+### 11.2 データ
+- `data/badges.js`（新規・固定形式）: `GameData.badges = [{ id, order, name, type, color }]`。index.html / editor.html で data/gacha.js の後に読み込む。
+- trainers.js 追加項目:
+  - `badge: 'wind'` … 勝利時にそのバッジを入手（ジムリーダー）。
+  - `league: 1〜5` … リーグの順番（1〜4 四天王、5 チャンピオン）。
+  - `party[].limitBreak: n` … トレーナーの個体の凸（能力強化）。
+- maps.js 追加項目:
+  - warp / npc の `requireBadges: n` … バッジが n 個未満なら通れない（warp: 「〇〇バッジが 〇こ ないと とおれない」で1歩戻す）。npc の `requireBadges` は「n 個そろうまで立ちふさがり、そろうと消える」通せんぼ。
+  - warp の `requireTrainer: 'trainerId'` … そのトレーナーを倒すまで通れない（リーグの部屋を順番に進ませる）。
+  - 既存の `hideAfter: 'trainerId'`、`requireParty` はそのまま。
+
+### 11.3 API 追加（core / battle / field）
+```
+App.state.badges() → [badgeId] / badgeCount() / hasBadge(id) / giveBadge(id)   // data.badges: { id: 'YYYY-MM-DD' }、event 'badges:changed'
+App.state.levelCap() → config.levelCaps[min(badgeCount, len-1)]
+App.state.isChampion() / setChampion()                                          // flags.champion（殿堂入り日時）
+App.state.resetLeague()                                                         // league を持つトレーナーの撃破記録を消す
+App.monster.addExp(inst, amount, { cap })  → 戻り値に overflow（上限で捨てた経験値）を追加。cap 省略時は maxLevel。
+App.monster.catchUpMult(level, cap) → 倍率
+```
+- battle: 経験値配分で catchUpMult を掛け、cap = App.state.levelCap() で addExp。overflow を合計して pt 変換（1日上限は state で管理: `flags.overflowPts = { date, pts }`）→「あふれた けいけんちが 〇ポイントに なった！」。上限到達時「〇〇は いまは これいじょう レベルが あがらない」（1バトル1回）。
+  トレーナーの `badge` → 勝利後「〇〇は 〇〇バッジを てにいれた！」+ ジングル → giveBadge →「レベルの じょうげんが 〇〇に あがった！」。
+  `league` のトレーナー: 敗北時 resetLeague（field の全滅処理より前）。league 5 に勝利 → setChampion → 殿堂入り演出（パーティのモンスターを並べる画面 + 「おめでとう！」、クレジット風）。
+- field: requireBadges / requireTrainer の判定。全滅時の respawn はリーグ内で負けたらリーグ入口のセンター（リーグ用マップの respawn 設定 or 最後に回復した場所。リーグ内には回復NPCを置かない）。
+- party: 「Lv上限 30（バッジ 1/4）」表示、上限到達個体の EXP バーに MAX。
+- settings（その他タブ）またはトップバー: バッジケース（4枠、未入手はシルエット）。debug に「バッジ+1」「リーグリセット」。
+- dex / editor: editor のトレーナーフォームに badge / league / limitBreak、マップの warp/npc JSON の説明に requireBadges / requireTrainer を追記。

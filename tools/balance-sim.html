@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>バランスシミュレーター</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; background: #fff; color: #222; }
+  pre { white-space: pre-wrap; font-size: 13px; }
+  button { font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>バランスシミュレーター</h1>
+<p>ジム・四天王・チャンピオンとの自動対戦（App.battleEngine）。URL: <code>?n=200&amp;seed=12345&amp;auto=1</code></p>
+<p><label>N <input id="n" type="number" value="200" min="1"></label> <button id="go" type="button">じっこう</button></p>
+<pre id="out"></pre>
+<script src="../data/config.js"></script>
+<script src="../data/tiles.js"></script>
+<script src="../data/types.js"></script>
+<script src="../data/moves.js"></script>
+<script src="../data/monsters.js"></script>
+<script src="../data/gacha.js"></script>
+<script src="../data/badges.js"></script>
+<script src="../data/trainers.js"></script>
+<script src="../data/maps.js"></script>
+<script src="../js/core/util.js"></script>
+<script src="../js/core/events.js"></script>
+<script src="../js/core/data.js"></script>
+<script src="../js/core/monster.js"></script>
+<script src="../js/core/state.js"></script>
+<script src="../js/battle/engine.js"></script>
+<script src="balance-sim.js"></script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const out = document.getElementById('out');
+  function go(n) {
+    out.textContent = 'けいさんちゅう…';
+    setTimeout(function () {
+      const t0 = performance.now();
+      const r = BalanceSim.run({ n: n, seed: Number(q.get('seed')) || 12345 });
+      window.BalanceSimResult = r;
+      out.textContent = r.markdown + '\n\n(' + Math.round(performance.now() - t0) + ' ms)\n\n## 道中の整合チェック\n' + BalanceSim.routeCheck().markdown;
+    }, 0);
+  }
+  document.getElementById('go').addEventListener('click', function () { go(Number(document.getElementById('n').value) || 200); });
+  if (q.get('n')) document.getElementById('n').value = q.get('n');
+  if (q.get('auto')) go(Number(q.get('n')) || 200);
+})();
+</script>
+</body>
+</html>

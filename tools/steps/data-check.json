@@ -2,6 +2,6 @@
   { "goto": "tools/datacheck.html" },
   { "waitFor": "window.DataCheck", "timeout": 5000 },
   { "eval": "JSON.stringify({ errors: DataCheck.errors.length, warnings: DataCheck.warnings.length, other: DataCheck.other.length, moves: DataCheck.stats.moveCount, monsters: DataCheck.stats.monsterCount, byRarity: DataCheck.stats.byRarity, byShape: DataCheck.stats.byShape, single: DataCheck.stats.single, dual: DataCheck.stats.dual, chart: DataCheck.stats.chart, chartDiffs: DataCheck.stats.chartDiffs })" },
-  { "eval": "(function () { const s = DataCheck.stats; const r = s.byRarity; const ok = DataCheck.errors.length === 0 && DataCheck.warnings.length === 0 && s.moveCount >= 90 && s.moveCount <= 110 && s.monsterCount === 48 && r.N === 16 && r.R === 13 && r.SR === 10 && r.SSR === 6 && r.UR === 3 && s.chartDiffs === 0 && s.chart.superEffective === 46 && s.chart.notVeryEffective === 57 && s.chart.immune === 7; if (!ok) throw new Error('data requirements not met'); return 'ALL REQUIREMENTS OK'; })()" },
+  { "eval": "(function () { const s = DataCheck.stats; const r = s.byRarity; const ok = DataCheck.errors.length === 0 && DataCheck.warnings.length === 0 && s.moveCount >= 90 && s.moveCount <= 110 && s.monsterCount === 78 && r.N === 38 && r.R === 21 && r.SR === 10 && r.SSR === 6 && r.UR === 3 && s.chartDiffs === 0 && s.chart.superEffective === 46 && s.chart.notVeryEffective === 57 && s.chart.immune === 7; if (!ok) throw new Error('data requirements not met'); return 'ALL REQUIREMENTS OK'; })()" },
   { "shot": "datacheck" }
 ]

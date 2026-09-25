@@ -1,0 +1,10 @@
+[
+  { "goto": "index.html" },
+  { "clearStorage": true },
+  { "goto": "index.html?autostart=1&tab=adventure" },
+  { "waitFor": "window.App && App.ready", "timeout": 15000 },
+  { "eval": "new Promise(function(r){var s=document.createElement('script');s.src='tools/steps/evo-helper.js';s.onload=function(){r('loaded')};document.body.appendChild(s);})" },
+  { "eval": "EvoTest.unit()" },
+  { "eval": "var v=App.data.validate(); JSON.stringify({errors: v.errors, evoWarn: v.warnings.filter(function(w){return /進化|evolution|しんか/.test(w)})})" },
+  { "eval": "JSON.stringify({hinokon: App.data.familyOf('hinokon'), fams: App.data.monsters().filter(function(m){return m.evolution}).length, gachaFalse: App.data.monsters().filter(function(m){return m.gacha===false}).length})" }
+]

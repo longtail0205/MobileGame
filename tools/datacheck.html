@@ -115,9 +115,15 @@
   };
   const DESC_LEN = [40, 70];
   const LEARNSET_LEN = [5, 9];
+  // 進化（SPEC 10）: 段階ごとの目安。[1段目, 2段目]
+  const EVO_BST = { N: [[370, 440], [460, 500]], R: [[450, 490]] };
+  const EVO_LEVEL = { N: [[16, 24], [32, 38]], R: [[28, 34]] };
+  const EVO_EXP_STEP = [50, 100];      // 1段ごとの baseExp の増加
+  const EVO_LEARNSET_LEN = [5, 14];
+  const EVO_KEYS = ['to', 'level'];
   const MOVE_KEYS = ['name', 'type', 'category', 'power', 'accuracy', 'pp', 'priority', 'critStage', 'effects', 'desc'];
   const MON_KEYS = ['id', 'no', 'name', 'rarity', 'types', 'baseStats', 'learnset', 'expGroup', 'baseExp', 'image',
-    'backImage', 'sprite', 'gacha', 'category', 'height', 'weight', 'desc'];
+    'backImage', 'sprite', 'gacha', 'evolution', 'category', 'height', 'weight', 'desc'];
   const EFFECT_KEYS = {
     stat: ['kind', 'target', 'stat', 'stages', 'chance'],
     status: ['kind', 'status', 'chance'],
@@ -156,6 +162,20 @@
     const gacha = isObj(GD.gacha) ? GD.gacha : {};
     const typeIds = Object.keys(types);
     const typeName = (t) => (types[t] && types[t].name) || t;
+    // 進化: to → 進化前 id（最初に見つかったもの）。段階 = 進化前をたどれる回数
+    const monIndex = {};
+    monsters.forEach((m) => { if (isObj(m) && isStr(m.id) && !monIndex[m.id]) monIndex[m.id] = m; });
+    const preOf = {};
+    monsters.forEach((m) => {
+      if (isObj(m) && isObj(m.evolution) && isStr(m.evolution.to) && m.evolution.to !== m.id && !preOf[m.evolution.to]) preOf[m.evolution.to] = m.id;
+    });
+    function evoStage(m) {
+      if (!isObj(m)) return 0;
+      let n = 0, cur = m.id;
+      const seen = {};
+      while (preOf[cur] && !seen[cur]) { seen[cur] = true; cur = preOf[cur]; n++; }
+      return seen[cur] ? 0 : n;   // 循環は 0 扱い（checkEvolution でエラー）
+    }
 
     // ===================================================================
     // 1. タイプ
@@ -307,6 +327,7 @@
       const ids = {}, nos = {}, names = {};
       const startLevel = isInt(gacha.startLevel) ? gacha.startLevel : 5;
       monsters.forEach((m, idx) => {
+        const stage = evoStage(m);
         const w = `monsters[${idx}]` + (m && m.id ? `(${m.id})` : '');
         if (!isObj(m)) { err(`${w}: オブジェクトではありません`); return; }
         const extra = unknownKeys(m, MON_KEYS);
@@ -338,10 +359,10 @@
           });
           const ex = unknownKeys(m.baseStats, STATS);
           if (ex.length) warn(`${w}: baseStats に不明な項目 ${ex.join(', ')}`);
-          const rg = BST_RANGE[m.rarity];
-          if (rg && (bst < rg[0] || bst > rg[1])) warn(`${w}: 種族値合計 ${bst} は ${m.rarity} の目安 ${rg[0]}〜${rg[1]} の範囲外`);
+          const rg = stage > 0 ? (EVO_BST[m.rarity] && EVO_BST[m.rarity][stage - 1]) : BST_RANGE[m.rarity];
+          if (rg && (bst < rg[0] || bst > rg[1])) warn(`${w}: 種族値合計 ${bst} は ${m.rarity}${stage > 0 ? `（進化${stage}段）` : ''} の目安 ${rg[0]}〜${rg[1]} の範囲外`);
         }
-        R.extra.set(m, { bst, startMoves: [] });
+        R.extra.set(m, { bst, startMoves: [], stage, bstRange: stage > 0 ? (EVO_BST[m.rarity] && EVO_BST[m.rarity][stage - 1]) : BST_RANGE[m.rarity] });
         // learnset
         if (!Array.isArray(m.learnset) || m.learnset.length === 0) err(`${w}: learnset がありません`);
         else {
@@ -359,7 +380,8 @@
           if (!sorted) warn(`${w}: learnset がレベル順に並んでいません`);
           if (!m.learnset.some((e) => isObj(e) && e.lv === 1)) err(`${w}: lv 1 のわざがありません`);
           if (!m.learnset.some((e) => isObj(e) && e.lv === 1 && isAttack(e.move))) err(`${w}: lv 1 の こうげきわざ がありません（入手直後に戦えません）`);
-          if (m.learnset.length < LEARNSET_LEN[0] || m.learnset.length > LEARNSET_LEN[1]) warn(`${w}: learnset が ${m.learnset.length} 個（目安 ${LEARNSET_LEN[0]}〜${LEARNSET_LEN[1]} 個）`);
+          const lsLen = stage > 0 ? EVO_LEARNSET_LEN : LEARNSET_LEN;
+          if (m.learnset.length < lsLen[0] || m.learnset.length > lsLen[1]) warn(`${w}: learnset が ${m.learnset.length} 個（目安 ${lsLen[0]}〜${lsLen[1]} 個）`);
           if (Array.isArray(m.types)) {
             m.types.forEach((t) => {
               if (!m.learnset.some((e) => isObj(e) && isAttack(e.move) && moves[e.move].type === t)) warn(`${w}: ${typeName(t)} タイプの こうげきわざ を覚えません`);
@@ -373,7 +395,7 @@
         if (m.expGroup !== undefined && !EXP_GROUPS.includes(m.expGroup)) err(`${w}: expGroup "${m.expGroup}" は ${EXP_GROUPS.join('/')}`);
         if (EXPGROUP_BY_RARITY[m.rarity] && m.expGroup && !EXPGROUP_BY_RARITY[m.rarity].includes(m.expGroup)) warn(`${w}: expGroup "${m.expGroup}" は ${m.rarity} の目安（${EXPGROUP_BY_RARITY[m.rarity].join(' / ')}）外`);
         if (!isNum(m.baseExp) || m.baseExp <= 0) err(`${w}: baseExp ${m.baseExp} は 1 以上の数値`);
-        else if (EXP_RANGE[m.rarity] && (m.baseExp < EXP_RANGE[m.rarity][0] || m.baseExp > EXP_RANGE[m.rarity][1])) warn(`${w}: baseExp ${m.baseExp} は ${m.rarity} の目安 ${EXP_RANGE[m.rarity].join('〜')} の範囲外`);
+        else if (stage === 0 && EXP_RANGE[m.rarity] &&(m.baseExp < EXP_RANGE[m.rarity][0] || m.baseExp > EXP_RANGE[m.rarity][1])) warn(`${w}: baseExp ${m.baseExp} は ${m.rarity} の目安 ${EXP_RANGE[m.rarity].join('〜')} の範囲外`);
         // 画像・スプライト
         ['image', 'backImage'].forEach((k) => { if (m[k] !== undefined && !isStr(m[k])) err(`${w}: ${k} は文字列（空なら ''）`); });
         if (m.sprite !== undefined) {
@@ -433,6 +455,77 @@
       const unused = Object.keys(moves).filter((id) => !used[id]);
       R.stats.unusedMoves = unused;
       if (unused.length) warn(`moves: どのモンスターも覚えないわざ ${unused.length} 個: ${unused.join(', ')}`);
+    }
+
+    // ===================================================================
+    // 3b. 進化（SPEC 10）
+    // ===================================================================
+    function checkEvolution() {
+      const maxLevel = isObj(GD.config) && isInt(GD.config.maxLevel) ? GD.config.maxLevel : 100;
+      const intoCount = {};
+      let evoCount = 0, familyCount = 0;
+      monsters.forEach((m, idx) => {
+        if (!isObj(m) || m.evolution === undefined) return;
+        const w = `monsters[${idx}](${m.id}).evolution`;
+        const ev = m.evolution;
+        if (!isObj(ev)) { err(`${w}: { to: '進化先id', level: レベル } の形にしてください`); return; }
+        const ex = unknownKeys(ev, EVO_KEYS);
+        if (ex.length) warn(`${w}: 不明な項目 ${ex.join(', ')}`);
+        if (!isStr(ev.to) || !ev.to) { err(`${w}: to（進化先id）がありません`); return; }
+        if (ev.to === m.id) { err(`${w}: 自分自身に しんかする設定です`); return; }
+        const to = monIndex[ev.to];
+        if (!to) { err(`${w}: 進化先 "${ev.to}" は monsters に存在しません`); return; }
+        evoCount++;
+        intoCount[ev.to] = (intoCount[ev.to] || 0) + 1;
+        if (!isInt(ev.level) || ev.level < 2 || ev.level > maxLevel) err(`${w}: level ${ev.level} は 2〜${maxLevel} の整数`);
+        // 循環
+        const seen = { [m.id]: true };
+        let cur = to, loop = false;
+        while (cur && isObj(cur.evolution) && isStr(cur.evolution.to)) {
+          if (seen[cur.id]) { loop = true; break; }
+          seen[cur.id] = true;
+          if (seen[cur.evolution.to]) { loop = true; break; }
+          cur = monIndex[cur.evolution.to];
+        }
+        if (loop) err(`${w}: 進化が 循環しています（${Object.keys(seen).join(' → ')}）`);
+        // 進化先の条件
+        if (to.rarity !== m.rarity) warn(`${w}: 進化先 ${to.id} の rarity ${to.rarity} が 進化前 ${m.rarity} と ちがいます`);
+        if (to.gacha !== false) warn(`${w}: 進化先 ${to.id} は gacha: false にしてください（育成でのみ入手）`);
+        if (m.expGroup !== to.expGroup) warn(`${w}: 進化先 ${to.id} の expGroup "${to.expGroup}" が 進化前 "${m.expGroup}" と ちがいます`);
+        if (isNum(m.baseExp) && isNum(to.baseExp)) {
+          const d = to.baseExp - m.baseExp;
+          if (d < EVO_EXP_STEP[0] || d > EVO_EXP_STEP[1]) warn(`${w}: 進化先 ${to.id} の baseExp が +${d}（目安 +${EVO_EXP_STEP.join('〜+')}）`);
+        }
+        if (Array.isArray(m.learnset) && Array.isArray(to.learnset)) {
+          const missing = m.learnset.filter((e) => isObj(e) && !to.learnset.some((t) => isObj(t) && t.move === e.move)).map((e) => e.move);
+          if (missing.length) warn(`${w}: 進化先 ${to.id} の learnset に 進化前の わざ ${missing.join(', ')} がありません`);
+          to.learnset.forEach((e) => { if (isObj(e) && !moves[e.move]) err(`${w}: 進化先 ${to.id} の わざ "${e.move}" は moves に存在しません`); });
+        }
+        const toShape = to.sprite && to.sprite.shape, fromShape = m.sprite && m.sprite.shape;
+        if (toShape && fromShape && toShape !== fromShape && !to.image) warn(`${w}: 進化先 ${to.id} の sprite.shape "${toShape}" が 進化前 "${fromShape}" と ちがいます（同じ系統に見えにくい）`);
+        // 目安（SR以上は進化しない / 進化レベルの範囲 / 2段目は1段目より後）
+        const stage = evoStage(m);   // 0 = 1段目の進化, 1 = 2段目の進化
+        if (!EVO_LEVEL[m.rarity]) warn(`${w}: ${m.rarity} は 進化しない方針です（SSR/UR などの価値を くずさないため）`);
+        else if (isInt(ev.level)) {
+          const rg = EVO_LEVEL[m.rarity][stage];
+          if (!rg) warn(`${w}: ${m.rarity} の 進化は ${EVO_LEVEL[m.rarity].length} 段までが目安です`);
+          else if (ev.level < rg[0] || ev.level > rg[1]) warn(`${w}: 進化レベル ${ev.level} は ${m.rarity}（${stage + 1}段目）の目安 ${rg[0]}〜${rg[1]} の範囲外`);
+        }
+        const pre = monIndex[preOf[m.id]];
+        if (pre && isObj(pre.evolution) && isInt(pre.evolution.level) && isInt(ev.level) && ev.level <= pre.evolution.level) {
+          warn(`${w}: 2段目の 進化レベル ${ev.level} が 1段目（${pre.id} Lv${pre.evolution.level}）以下です`);
+        }
+        if (!preOf[m.id]) familyCount++;
+      });
+      Object.keys(intoCount).forEach((id) => { if (intoCount[id] > 1) err(`monsters: ${id} に しんかする モンスターが ${intoCount[id]} 体あります（進化前は 1体まで）`); });
+      // gacha:false なのに 進化前がなく、野生・トレーナーにも出ない種は 入手できない
+      monsters.forEach((m) => {
+        if (!isObj(m) || m.gacha !== false || preOf[m.id]) return;
+        info(`monsters: ${m.id} は gacha: false で 進化前もありません（野生・トレーナー専用）`);
+      });
+      R.stats.evolutionCount = evoCount;
+      R.stats.familyCount = familyCount;
+      info(`evolution: 進化 ${evoCount} 件 / 進化系統 ${familyCount} 系統`);
     }
 
     // ===================================================================
@@ -568,6 +661,10 @@
             const w = `maps.${mid}.encounters.table[${i}]`;
             if (!monById[e.species]) other(`${w}: species "${e.species}" は monsters に存在しません`);
             if (!(e.min <= e.max)) other(`${w}: min ${e.min} > max ${e.max}`);
+            const pre = monIndex[preOf[e.species]];
+            if (pre && isObj(pre.evolution) && isInt(pre.evolution.level) && e.min < pre.evolution.level - 2) {
+              other(`${w}: 進化後の ${e.species} が Lv${e.min} で出現します（${pre.id} の 進化Lv${pre.evolution.level} より かなり低い）`);
+            }
           });
         }
         (Array.isArray(mp.npcs) ? mp.npcs : []).forEach((n) => {
@@ -579,7 +676,7 @@
     // ===================================================================
     // 実行
     // ===================================================================
-    const steps = [checkTypes, checkMoves, checkMonsters, checkGacha, checkOthers];
+    const steps = [checkTypes, checkMoves, checkMonsters, checkEvolution, checkGacha, checkOthers];
     steps.forEach((fn) => {
       try { fn(); } catch (e) { err(`チェッカー内部エラー (${fn.name}): ${e && e.message}`); }
     });
@@ -610,6 +707,13 @@
       ['タイプ網羅', (d) => { d.monsters.forEach((m) => { m.types = m.types.filter((t) => t !== 'dragon'); if (!m.types.length) m.types = ['normal']; }); }, 'warnings', 'ドラゴン タイプのモンスター'],
       ['不明な体型', (d) => { d.monsters[0].sprite.shape = 'robot'; }, 'errors', 'sprite.shape'],
       ['色の書式', (d) => { d.monsters[0].sprite.colors = ['red', '#ffffff', '#000000']; }, 'errors', 'sprite.colors[0]'],
+      ['進化先の参照切れ', (d) => { d.monsters[0].evolution = { to: 'nosuchmon', level: 18 }; }, 'errors', '進化先 "nosuchmon"'],
+      ['進化の自己参照', (d) => { d.monsters[0].evolution = { to: d.monsters[0].id, level: 18 }; }, 'errors', '自分自身'],
+      ['進化の循環', (d) => { const a = d.monsters.find((m) => m.evolution); const b = d.monsters.find((m) => m.id === a.evolution.to); b.evolution = { to: a.id, level: 50 }; }, 'errors', '循環'],
+      ['進化レベルの範囲', (d) => { d.monsters.find((m) => m.evolution).evolution.level = 1; }, 'errors', 'level 1 は'],
+      ['進化先が gacha:true', (d) => { const a = d.monsters.find((m) => m.evolution); d.monsters.find((m) => m.id === a.evolution.to).gacha = true; }, 'warnings', 'gacha: false にしてください'],
+      ['進化先の rarity 不一致', (d) => { const a = d.monsters.find((m) => m.evolution); d.monsters.find((m) => m.id === a.evolution.to).rarity = 'SSR'; }, 'warnings', 'rarity SSR'],
+      ['進化先に存在しないわざ', (d) => { const a = d.monsters.find((m) => m.evolution); d.monsters.find((m) => m.id === a.evolution.to).learnset.push({ lv: 99, move: 'nosuchmove' }); }, 'errors', 'わざ "nosuchmove"'],
       ['トレーナーの参照切れ', (d) => { d.trainers = { t: { party: [{ species: 'nosuchmon', level: 5 }] } }; }, 'other', '"nosuchmon"'],
     ];
     let failed = 0;
@@ -679,10 +783,10 @@
     <th>合計</th><th>体型・色</th><th>経験</th><th>Lv5のわざ</th><th>覚えるわざ</th></tr>`;
   monsters.slice().filter(isObj).sort((a, b) => a.no - b.no).forEach((m) => {
     const bs = m.baseStats || {};
-    const rg = BST_RANGE[m.rarity];
+    const rg = extra(m).bstRange;
     const bstBad = rg && (extra(m).bst < rg[0] || extra(m).bst > rg[1]);
     const sp = m.sprite || {};
-    html += `<tr><td class="num">${esc(m.no)}</td><td>${esc(m.id)}</td><td class="nw">${esc(m.name)}<br><span class="dim">${esc(m.category || '')}</span></td>
+    html += `<tr><td class="num">${esc(m.no)}</td><td>${esc(m.id)}</td><td class="nw">${esc(m.name)}<br><span class="dim">${esc(m.category || '')}</span>${isObj(m.evolution) ? `<br><span class="dim">→ Lv${esc(m.evolution.level)} ${esc((monsters.find((x) => isObj(x) && x.id === m.evolution.to) || {}).name || m.evolution.to)}</span>` : ''}${m.gacha === false ? '<br><span class="dim">ガチャ対象外</span>' : ''}</td>
       <td>${rarBadge(m.rarity)}</td><td>${(m.types || []).map(typeBadge).join('')}</td>
       ${STATS.map((s) => `<td class="num">${esc(bs[s])}<br><span class="bar" style="width:${Math.round((bs[s] || 0) / 3)}px"></span></td>`).join('')}
       <td class="num ${bstBad ? 'bad' : ''}">${extra(m).bst}</td>
