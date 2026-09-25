@@ -28,6 +28,7 @@
   const NPC_MOVES = ['still', 'turn', 'wander'];
   const AIS = ['random', 'smart'];
   const REMATCH = ['never', 'daily'];
+  const LEAGUE_MAX = 5;
 
   let overrideWarnings = [];
   let overrideInfo = { active: false, keys: [], savedAt: 0, broken: false };
@@ -78,6 +79,48 @@
       if (typeof v === 'number') mul *= v;
     }
     return mul;
+  }
+
+  // ---------------------------------------------------------------- 進化（SPEC 10.3）
+  function evolutionOf(id) {
+    const m = monster(id);
+    const ev = m && m.evolution;
+    if (!ev || typeof ev !== 'object' || !ev.to || ev.to === id || !monster(ev.to)) return null;
+    const level = Number(ev.level);
+    if (!isFinite(level)) return null;
+    return { to: ev.to, level };
+  }
+  function preEvolutionOf(id) {
+    if (id === null || id === undefined) return null;
+    const list = monsterList();
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
+      if (m && m.id !== id && m.evolution && m.evolution.to === id && evolutionOf(m.id)) return m.id;
+    }
+    return null;
+  }
+  function familyRoot(id) {
+    let cur = id;
+    const seen = new Set([cur]);
+    for (;;) {
+      const pre = preEvolutionOf(cur);
+      if (!pre || seen.has(pre)) return cur;   // 循環データでも止まる
+      seen.add(pre);
+      cur = pre;
+    }
+  }
+  function familyOf(id) {
+    if (!monster(id)) return [];
+    const out = [];
+    const seen = new Set();
+    let cur = familyRoot(id);
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      out.push(cur);
+      const ev = evolutionOf(cur);
+      cur = ev ? ev.to : null;
+    }
+    return out;
   }
 
   // そのモンスターが野生で出現する場所
@@ -257,6 +300,45 @@
     }
     const monById = (id) => (Array.isArray(monArr) ? monArr.find((m) => m && m.id === id) : null);
 
+    // ---- 進化（SPEC 10.3）
+    if (Array.isArray(monArr)) {
+      const preOf = new Map();
+      monArr.forEach((m) => {
+        if (!isObj(m) || m.evolution === undefined || m.evolution === null) return;
+        const p = `[モンスター ${m.id}${m.name ? '（' + m.name + '）' : ''}]`;
+        const ev = m.evolution;
+        if (!isObj(ev)) { err(`${p} evolution は { to, level } のオブジェクトにしてください`); return; }
+        const to = ev.to ? monById(ev.to) : null;
+        if (!to) err(`${p} 進化先 "${ev.to}" が monsters に存在しません`);
+        else if (ev.to === m.id) err(`${p} 進化先に自分自身が指定されています`);
+        else {
+          if (preOf.has(ev.to)) err(`${p} 進化先 "${ev.to}" は「${preOf.get(ev.to)}」の進化先にもなっています（分岐・合流は不可）`);
+          else preOf.set(ev.to, m.id);
+          if (to.rarity !== m.rarity) warn(`${p} 進化先 "${ev.to}" のレア度 ${to.rarity} が進化前 ${m.rarity} と異なります`);
+          if (to.gacha !== false) warn(`${p} 進化先 "${ev.to}" は gacha: false にしてください（ガチャ対象になっています）`);
+        }
+        if (!(isInt(ev.level) && ev.level >= 2 && ev.level <= maxLevel)) err(`${p} evolution.level は 2〜${maxLevel} の整数にしてください (${ev.level})`);
+      });
+      // 循環検出
+      const reported = new Set();
+      monArr.forEach((m) => {
+        if (!isObj(m) || !isObj(m.evolution) || reported.has(m.id)) return;
+        const path = [m.id];
+        let cur = m;
+        while (cur && isObj(cur.evolution) && cur.evolution.to && cur.evolution.to !== cur.id) {
+          const next = cur.evolution.to;
+          if (path.includes(next)) {
+            const loop = path.slice(path.indexOf(next)).concat(next);
+            if (!loop.some((id) => reported.has(id))) err(`[進化] 循環しています: ${loop.join(' → ')}`);
+            loop.forEach((id) => reported.add(id));
+            break;
+          }
+          path.push(next);
+          cur = monById(next);
+        }
+      });
+    }
+
     // ---- ガチャ
     const gacha = GD.gacha;
     if (!isObj(gacha)) err('GameData.gacha がありません（data/gacha.js）');
@@ -319,6 +401,22 @@
       }
     }
 
+    // ---- バッジ（data/badges.js）
+    const badgeIds = new Set();
+    if (GD.badges !== undefined && !Array.isArray(GD.badges)) err('GameData.badges が配列ではありません（data/badges.js）');
+    (Array.isArray(GD.badges) ? GD.badges : []).forEach((b, i) => {
+      const p = `[バッジ #${i}]`;
+      if (!isObj(b)) { err(`${p} 定義がオブジェクトではありません`); return; }
+      if (!b.id) err(`${p} id がありません`);
+      else if (badgeIds.has(b.id)) err(`${p} id "${b.id}" が重複しています`);
+      else badgeIds.add(b.id);
+      if (!b.name) warn(`[バッジ ${b.id || '#' + i}] name がありません`);
+    });
+    const badgeTotal = badgeIds.size;
+    const maxLB = isObj(gacha) && isInt(gacha.maxLimitBreak) ? gacha.maxLimitBreak : 0;
+    const badgeOwner = new Map();
+    const leagueOf = new Map();
+
     // ---- トレーナー
     const trainersObj = isObj(GD.trainers) ? GD.trainers : {};
     if (GD.trainers !== undefined && !isObj(GD.trainers)) err('GameData.trainers がオブジェクトではありません（data/trainers.js）');
@@ -340,7 +438,20 @@
               pm.moves.forEach((mv) => { if (!movesObj[mv]) err(`${p} party[${i}] のわざ "${mv}" が存在しません`); });
             }
           }
+          if (pm.limitBreak !== undefined && !(isInt(pm.limitBreak) && pm.limitBreak >= 0 && pm.limitBreak <= maxLB)) warn(`${p} party[${i}].limitBreak は 0〜${maxLB} の整数にしてください (${pm.limitBreak})`);
         });
+      }
+      if (t.badge !== undefined) {
+        if (!badgeIds.has(t.badge)) err(`${p} バッジ "${t.badge}" が badges に存在しません（data/badges.js）`);
+        else if (badgeOwner.has(t.badge)) err(`${p} バッジ "${t.badge}" は「${badgeOwner.get(t.badge)}」にも付いています（1つのバッジは1人だけ）`);
+        else badgeOwner.set(t.badge, id);
+      }
+      if (t.league !== undefined) {
+        if (!(isInt(t.league) && t.league >= 1 && t.league <= LEAGUE_MAX)) err(`${p} league は 1〜${LEAGUE_MAX} の整数にしてください (${t.league})`);
+        else {
+          if (!leagueOf.has(t.league)) leagueOf.set(t.league, []);
+          leagueOf.get(t.league).push(id);
+        }
       }
       if (t.reward !== undefined && !(isNum(t.reward) && t.reward >= 0)) warn(`${p} reward が不正です`);
       if (t.ai !== undefined && !AIS.includes(t.ai)) warn(`${p} ai "${t.ai}" は未知です`);
@@ -348,6 +459,14 @@
       ['intro', 'lose', 'win', 'after'].forEach((k) => {
         if (t[k] !== undefined && !Array.isArray(t[k]) && typeof t[k] !== 'string') warn(`${p} ${k} は文字列の配列にしてください`);
       });
+    }
+    // リーグ（1〜4 四天王、5 チャンピオン）: 重複・欠番は警告
+    if (leagueOf.size) {
+      for (let n = 1; n <= LEAGUE_MAX; n++) {
+        const ids = leagueOf.get(n) || [];
+        if (!ids.length) warn(`[リーグ] ${n}番目（${n === LEAGUE_MAX ? 'チャンピオン' : '四天王'}）のトレーナーがいません`);
+        else if (ids.length > 1) warn(`[リーグ] ${n}番目のトレーナーが重複しています: ${ids.join(', ')}`);
+      }
     }
 
     // ---- タイル
@@ -374,6 +493,12 @@
     const tileAt = (m, x, y) => (inMap(m, x, y) ? String(m.tiles[y])[x] : undefined);
     const walkable = (m, x, y) => { const ch = tileAt(m, x, y); return ch !== undefined && !!(tilesObj[ch] && tilesObj[ch].walk); };
     const pickupIds = new Map();
+    // requireBadges: 0〜バッジ総数の整数
+    const checkRequireBadges = (q, v) => {
+      if (v === undefined) return;
+      if (!(isInt(v) && v >= 0)) warn(`${q} の requireBadges は 0 以上の整数にしてください (${v})`);
+      else if (v > badgeTotal) warn(`${q} の requireBadges ${v} がバッジの総数 ${badgeTotal} を超えています（永久に通れません）`);
+    };
     for (const mapId of Object.keys(mapsObj)) {
       const m = mapsObj[mapId];
       const p = `[マップ ${mapId}]`;
@@ -392,6 +517,11 @@
       });
       unknown.forEach((pos, ch) => err(`${p} 未知のタイル記号 "${ch}" があります（最初の位置 ${pos}）`));
       if (m.border !== undefined && !tilesObj[m.border]) warn(`${p} border のタイル記号 "${m.border}" が tiles に存在しません`);
+      if (m.respawn !== undefined) {
+        const r = m.respawn;
+        if (!isObj(r) || !mapsObj[r.map]) warn(`${p} respawn のマップ "${isObj(r) ? r.map : r}" が存在しません（{ map, x, y, dir }）`);
+        else if (!walkable(mapsObj[r.map], r.x, r.y)) warn(`${p} respawn の座標 (${r.x},${r.y}) は ${r.map} の歩ける場所ではありません`);
+      }
       if (m.encounters !== undefined) {
         const enc = m.encounters;
         if (!isObj(enc)) warn(`${p} encounters はオブジェクトにしてください`);
@@ -418,6 +548,8 @@
         else if (!inMap(dest, wp.tx, wp.ty)) err(`${q} のワープ先座標 (${wp.tx},${wp.ty}) が ${wp.to} の範囲外です`);
         else if (!walkable(dest, wp.tx, wp.ty)) warn(`${q} のワープ先 (${wp.tx},${wp.ty}) は歩けないタイルです`);
         if (wp.dir !== undefined && !DIRS.includes(wp.dir)) warn(`${q} の dir "${wp.dir}" が不正です`);
+        checkRequireBadges(q, wp.requireBadges);
+        if (wp.requireTrainer !== undefined && !trainersObj[wp.requireTrainer]) err(`${q} の requireTrainer "${wp.requireTrainer}" が trainers に存在しません`);
       });
       const npcIds = new Set();
       (Array.isArray(m.npcs) ? m.npcs : []).forEach((n, i) => {
@@ -436,6 +568,7 @@
         if (n.dir !== undefined && !DIRS.includes(n.dir)) warn(`${q} の dir "${n.dir}" が不正です`);
         if (n.move !== undefined && !NPC_MOVES.includes(n.move)) warn(`${q} の move "${n.move}" は未知です`);
         if (n.sight !== undefined && !(isInt(n.sight) && n.sight >= 0)) warn(`${q} の sight が不正です`);
+        checkRequireBadges(q, n.requireBadges);
       });
       (Array.isArray(m.signs) ? m.signs : []).forEach((s, i) => {
         if (!isObj(s)) { err(`${p} signs[${i}] がオブジェクトではありません`); return; }
@@ -526,6 +659,7 @@
     rarity, rarityOrder, rarityRank,
     trainer, map, tile,
     typeEffect, encounterLocations,
+    evolutionOf, preEvolutionOf, familyOf, familyRoot,
     validate,
     applyOverrides, hasOverrides, clearOverrides,
     // 追加: 上書きの適用状況 { active, keys, savedAt, broken }

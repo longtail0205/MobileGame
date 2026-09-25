@@ -98,9 +98,10 @@
     return inst;
   }
 
-  function expProgress(inst) {
+  // cap（省略可）: 現在のレベル上限。上限に達していれば 1（MAX 表示用）
+  function expProgress(inst, cap) {
     const L = inst.level;
-    if (L >= maxLevel()) return 1;
+    if (L >= maxLevel() || (cap && L >= cap)) return 1;
     const g = groupOf(inst);
     const cur = expForLevel(L, g);
     const next = expForLevel(L + 1, g);
@@ -108,23 +109,39 @@
     return Math.max(0, Math.min(1, (inst.exp - cur) / (next - cur)));
   }
 
-  function expToNext(inst) {
-    if (inst.level >= maxLevel()) return 0;
+  function expToNext(inst, cap) {
+    if (inst.level >= maxLevel() || (cap && inst.level >= cap)) return 0;
     return Math.max(0, expForLevel(inst.level + 1, groupOf(inst)) - inst.exp);
+  }
+
+  // 追いつきボーナス: 上限との差（cap − level）が below 以上なら mult（上から順に最初に合うもの）
+  function catchUpMult(level, cap) {
+    const diff = (Number(cap) || 0) - (Number(level) || 0);
+    const list = Array.isArray(cfg().catchUpExp) ? cfg().catchUpExp : [];
+    for (const e of list) {
+      if (e && diff >= Number(e.below) && Number(e.mult) > 0) return Number(e.mult);
+    }
+    return 1;
   }
 
   function isFainted(inst) { return !inst || !(inst.hp > 0); }
 
-  function addExp(inst, amount) {
+  // opts.cap: 現在のレベル上限（省略時 maxLevel）。上限で捨てた経験値は overflow として返す
+  function addExp(inst, amount, opts) {
+    opts = opts || {};
     const g = groupOf(inst);
     const def = species(inst);
     const oldLevel = inst.level;
     const statsBefore = stats(inst);
     const learned = [];
     const pending = [];
-    const cap = maxLevel();
+    const optCap = Math.floor(Number(opts.cap));
+    const cap = optCap >= 1 ? Math.min(maxLevel(), optCap) : maxLevel();
     const add = Math.max(0, Math.floor(Number(amount) || 0));
-    if (inst.level < cap) {
+    let overflow = 0;
+    if (inst.level >= cap) {
+      overflow = add;
+    } else {
       inst.exp = (Number(inst.exp) || 0) + add;
       while (inst.level < cap && inst.exp >= expForLevel(inst.level + 1, g)) {
         inst.level++;
@@ -141,7 +158,11 @@
           }
         }
       }
-      if (inst.level >= cap) inst.exp = expForLevel(cap, g);
+      if (inst.level >= cap) {
+        const capExp = expForLevel(cap, g);
+        overflow = Math.max(0, inst.exp - capExp);
+        inst.exp = capExp;
+      }
     }
     const statsAfter = stats(inst);
     if (!isFainted(inst)) {
@@ -153,13 +174,40 @@
       levelsGained: inst.level - oldLevel,
       learned,
       pending,
+      overflow,
+      capped: inst.level >= cap,
       statsBefore,
       statsAfter,
     };
   }
 
+  // 系統の進化前〜現在の種の learnset を合わせて lv ≤ 現レベルのわざ（lv 昇順・重複除去）
   function learnableMoves(inst) {
-    return learnsetUpTo(species(inst), inst.level);
+    const id = inst && inst.speciesId;
+    const family = App.data.familyOf ? App.data.familyOf(id) : [];
+    const idx = family.indexOf(id);
+    const chain = idx >= 0 ? family.slice(0, idx + 1) : [id];
+    if (chain.length <= 1) return learnsetUpTo(species(inst), inst.level);
+    const list = [];
+    chain.forEach((sid, ci) => {
+      const def = App.data.monster(sid);
+      (def && Array.isArray(def.learnset) ? def.learnset : []).forEach((l, i) => {
+        list.push({ lv: Number(l && l.lv) || 1, move: l && l.move, ci, i });
+      });
+    });
+    const sorted = list
+      .filter((l) => l.lv <= inst.level && App.data.move(l.move))
+      .sort((a, b) => (a.lv - b.lv) || (a.ci - b.ci) || (a.i - b.i));
+    const out = [];
+    for (const l of sorted) if (!out.includes(l.move)) out.push(l.move);
+    return out;
+  }
+
+  // 進化できるなら進化先 ID（level >= evolution.level）
+  function canEvolve(inst) {
+    if (!inst || !App.data.evolutionOf) return null;
+    const ev = App.data.evolutionOf(inst.speciesId);
+    return ev && inst.level >= ev.level ? ev.to : null;
   }
 
   function setMoves(inst, moveIds) {
@@ -204,8 +252,8 @@
 
   App.monster = {
     create, stats,
-    expForLevel, expProgress, expToNext, addExp,
-    learnableMoves, setMoves,
+    expForLevel, expProgress, expToNext, addExp, catchUpMult,
+    learnableMoves, setMoves, canEvolve,
     heal, isFainted, maxPP,
     displayName, expYield, wildPoints,
     // 追加: 個体 or ID から種族定義を得る

@@ -13,6 +13,7 @@
   let panel = null;
   let built = false;
   let visible = false;
+  let bgmBefore = null;   // ガチャタブに入る前に流れていた BGM（はなれるときに もどす）
   let busy = false;
   let bannerId = null;
   let refs = {};
@@ -89,13 +90,11 @@
   }
 
   // ---------------------------------------------------------------- タブバッジ
-  //   main.js も freepulls:changed で数字だけのバッジを付けるため、次のタスクで上書きする
+  //   表記は main.js と同じ「無料n」（main.js も freepulls:changed で同じ表記に更新する）
   function updateBadge() {
-    setTimeout(() => {
-      if (!App.main || typeof App.main.setTabBadge !== 'function' || !App.state || !App.state.data) return;
-      const n = App.state.freePulls();
-      App.main.setTabBadge('gacha', n > 0 ? '無料' + n : null);
-    }, 0);
+    if (!App.main || typeof App.main.setTabBadge !== 'function' || !App.state || !App.state.data) return;
+    const n = App.state.freePulls();
+    App.main.setTabBadge('gacha', n > 0 ? '無料' + n : null);
   }
 
   // ---------------------------------------------------------------- 画面構築
@@ -813,6 +812,8 @@
         status = el('div', { class: 'gc-rv-status is-lb gc-rv-detail' },
           el('span', { text: '限界突破 ' }), el('b', { text: '★' + res.limitBreak }), App.ui.stars(res.limitBreak));
       }
+      const ownedDef = !res.isNew && res.ownedId && res.ownedId !== res.speciesId ? App.data.monster(res.ownedId) : null;
+      if (ownedDef) status.appendChild(el('small', { class: 'gc-rv-family', text: '（' + ownedDef.name + ' に はんえい）' }));
       return el('div', { class: ['gc-rv', rarityClass(r), d.rainbow ? 'is-rainbow' : ''] },
         el('div', { class: 'gc-rv-halo' }),
         res.pickup ? el('div', { class: 'gc-rv-pu gc-rv-detail', text: 'PICK UP!' }) : null,
@@ -971,7 +972,7 @@
         el('h4', { class: 'gc-rate-gtitle' }, App.ui.rarityBadge(r), el('span', { text: d.name }), el('b', { text: pct(rr[r]) })),
         el('ul', { class: 'gc-rate-list' }, items.map((x) => {
           const def = App.data.monster(x.speciesId);
-          const owned = App.state.isOwned(x.speciesId);
+          const owned = App.state.ownedInFamily ? !!App.state.ownedInFamily(x.speciesId) : App.state.isOwned(x.speciesId);
           return el('li', { class: ['gc-rate-item', x.pickup ? 'is-pu' : ''] },
             el('span', { class: 'gc-rate-img' }, spriteImg(x.speciesId, 'gc-rate-sprite')),
             el('span', { class: 'gc-rate-mname', text: def ? def.name : x.speciesId }),
@@ -1057,14 +1058,24 @@
     visible = true;
     if (!built) build();
     refresh();
-    try { if (App.audio) App.audio.playBgm('gacha'); } catch (e) { /* 無視 */ }
+    try {
+      if (App.audio) {
+        const cur = typeof App.audio.currentBgm === 'function' ? App.audio.currentBgm() : null;
+        bgmBefore = cur && cur !== 'gacha' ? cur : null;
+        App.audio.playBgm('gacha');
+      }
+    } catch (e) { /* 無視 */ }
   }
 
   function onHide() {
     visible = false;
     try {
-      if (App.audio && typeof App.audio.currentBgm === 'function' && App.audio.currentBgm() === 'gacha') App.audio.stopBgm();
+      if (App.audio && typeof App.audio.currentBgm === 'function' && App.audio.currentBgm() === 'gacha') {
+        if (bgmBefore) App.audio.playBgm(bgmBefore);
+        else App.audio.stopBgm();
+      }
     } catch (e) { /* 無視 */ }
+    bgmBefore = null;
   }
 
   App.gachaTab = {

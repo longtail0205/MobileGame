@@ -217,7 +217,7 @@ GameData.maps = {
     border: 'T',
     indoor: false,
     tiles: [
-      'TTTTTTTTTTSSTTTTTTTTTT',
+      'TTTTTTTTTT::TTTTTTTTTT',
       'TTTTTTTTT.::.TTTTTTTTT',
       'TTT,,,,...::....FF.TTT',
       'TT.,,,,,..::.........T',
@@ -277,8 +277,6 @@ GameData.maps = {
       },
     ],
     signs: [
-      { x: 10, y: 0, text: ['メンテナンス中'] }, 
-      { x: 11, y: 0, text: ['メンテナンス中'] }, 
       { x: 12, y: 4, text: ['1ばんどうろ', '↑ ささやきのもり   ↓ コモレビタウン'] },
       { x: 9, y: 21, text: ['1ばんどうろ', 'くさむらでは やせいの モンスターに ちゅうい！'] },
     ],

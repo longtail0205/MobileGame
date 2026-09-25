@@ -1,0 +1,199 @@
+/* =====================================================================
+   field.css — ぼうけん（フィールド）の演出
+   座標は #screen の実ピクセル（720x480 = GBA 240x160 の3倍）。1ドット = 3px。
+   ===================================================================== */
+
+/* ---------------------------------------------------------------- 暗転・フラッシュ */
+.fd-fx {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+#field-layer > .fd-curtain {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- マップ名プレート（木の看板） */
+#field-layer > .fd-mapname {
+  position: absolute;
+  left: 15px;
+  top: 0;
+  z-index: 2;
+  min-width: 246px;
+  height: 66px;
+  padding: 0 33px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font);
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: #483018;
+  text-shadow: 3px 3px 0 #d8c090;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0 3px, transparent 3px),
+    repeating-linear-gradient(180deg, #f0dca8 0 15px, #e8d098 15px 18px);
+  border: 3px solid #3a2410;
+  border-top: 0;
+  box-shadow:
+    inset 0 0 0 3px #b07838,
+    inset 0 0 0 6px #d8a860,
+    0 6px 0 rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  transform: translateY(-120%);
+  visibility: hidden;
+}
+#field-layer > .fd-mapname::before,
+#field-layer > .fd-mapname::after {
+  content: '';
+  position: absolute;
+  top: 27px;
+  width: 6px;
+  height: 6px;
+  background: #7a5028;
+  box-shadow: 0 -3px 0 #f8e8c0;
+}
+#field-layer > .fd-mapname::before { left: 15px; }
+#field-layer > .fd-mapname::after { right: 15px; }
+#field-layer > .fd-mapname.is-show {
+  visibility: visible;
+  animation: fd-mapname 2.6s steps(1, end) 0s 1 both, fd-mapname-move 2.6s linear 0s 1 both;
+}
+@keyframes fd-mapname { 0%, 100% { visibility: visible; } }
+@keyframes fd-mapname-move {
+  0% { transform: translateY(-120%); }
+  9% { transform: translateY(0); }
+  88% { transform: translateY(0); }
+  100% { transform: translateY(-120%); }
+}
+
+/* ---------------------------------------------------------------- タイトル画面 */
+#field-layer > .fd-title {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, rgba(120, 180, 255, 0.35), transparent 70%),
+    linear-gradient(180deg, #0c1250 0%, #2238a0 45%, #4a78e0 72%, #88c0f8 100%);
+  font-family: var(--font);
+  color: #fff;
+}
+.fd-title.is-leaving { animation: fd-title-out 0.4s ease-in forwards; pointer-events: none; }
+@keyframes fd-title-out { to { opacity: 0; transform: scale(1.04); } }
+
+.fd-title-stars {
+  position: absolute;
+  inset: 0 0 40% 0;
+  background-image:
+    radial-gradient(3px 3px at 60px 45px, #fff 50%, transparent 51%),
+    radial-gradient(3px 3px at 180px 96px, #ffe890 50%, transparent 51%),
+    radial-gradient(3px 3px at 312px 30px, #fff 50%, transparent 51%),
+    radial-gradient(3px 3px at 462px 75px, #bfe0ff 50%, transparent 51%),
+    radial-gradient(3px 3px at 600px 36px, #fff 50%, transparent 51%),
+    radial-gradient(3px 3px at 675px 120px, #ffe890 50%, transparent 51%),
+    radial-gradient(3px 3px at 120px 150px, #bfe0ff 50%, transparent 51%),
+    radial-gradient(3px 3px at 540px 165px, #fff 50%, transparent 51%);
+  animation: fd-twinkle 1.6s steps(2) infinite;
+}
+@keyframes fd-twinkle { 50% { opacity: 0.45; } }
+
+.fd-title-hill {
+  position: absolute;
+  left: -30px;
+  right: -30px;
+  bottom: -60px;
+  height: 180px;
+  border-radius: 50% 50% 0 0 / 60px 60px 0 0;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 6px, transparent 6px 18px),
+    linear-gradient(180deg, #58c060 0 12px, #3a9848 12px 100%);
+  box-shadow: 0 -6px 0 #88e070;
+}
+
+.fd-title-logo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fd-logo-in 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes fd-logo-in { from { transform: translateY(-60px) scale(0.8); opacity: 0; } }
+.fd-title-main {
+  font-size: 96px;
+  line-height: 1;
+  letter-spacing: 6px;
+  color: #ffe45c;
+  text-shadow:
+    0 6px 0 #e07820,
+    6px 0 0 #3a1c6a, -6px 0 0 #3a1c6a, 0 -6px 0 #3a1c6a, 0 12px 0 #3a1c6a,
+    6px 6px 0 #3a1c6a, -6px 6px 0 #3a1c6a, 6px -6px 0 #3a1c6a, -6px -6px 0 #3a1c6a,
+    6px 12px 0 #3a1c6a, -6px 12px 0 #3a1c6a,
+    0 18px 0 rgba(0, 0, 0, 0.35);
+}
+.fd-title-sub {
+  margin-top: 27px;
+  padding: 3px 18px;
+  font-size: 21px;
+  letter-spacing: 9px;
+  color: #fff;
+  background: #3a1c6a;
+  box-shadow: 0 0 0 3px #ffe45c;
+}
+
+.fd-title-mons {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 84px;
+  height: 192px;
+}
+.fd-title-mon {
+  position: absolute;
+  bottom: 0;
+  width: 144px;
+  height: 144px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.25));
+  animation: fd-float 2.4s ease-in-out infinite;
+}
+.fd-title-mon-0 { left: 84px; animation-delay: -0.8s; }
+.fd-title-mon-1 { left: 264px; width: 192px; height: 192px; bottom: 6px; animation-delay: 0s; }
+.fd-title-mon-2 { right: 84px; animation-delay: -1.6s; }
+@keyframes fd-float { 50% { translate: 0 -12px; } }
+
+.fd-title-press {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 30px;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 3px 3px 0 #1a3a20, -3px 0 0 #1a3a20, 0 -3px 0 #1a3a20, 3px 0 0 #1a3a20, 0 3px 0 #1a3a20;
+  animation: blink 1.1s steps(1) infinite;
+}
+.fd-title-ver {
+  position: absolute;
+  right: 12px;
+  top: 9px;
+  font-size: 18px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+}

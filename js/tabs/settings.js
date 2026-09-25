@@ -47,6 +47,8 @@
     refs.playerName = el('b', { class: 'player-name' });
     refs.playerMeta = el('div', { class: 'player-meta' });
     refs.statsGrid = el('div', { class: 'stat-grid' });
+    refs.badgeCase = el('div', { class: 'badge-case' });
+    refs.badgeNote = el('p', { class: 'badge-note muted' });
     grid.appendChild(section('プレイヤー', '◆',
       el('div', { class: 'player-card' },
         el('div', { class: 'player-avatar', 'aria-hidden': 'true' }),
@@ -54,6 +56,8 @@
           el('div', { class: 'player-name-row' }, refs.playerName,
             U().el('button', { class: 'btn btn-sm', type: 'button', text: 'なまえを かえる', onclick: rename })),
           refs.playerMeta)),
+      el('h4', { class: 'sub-title', text: 'バッジケース' }),
+      refs.badgeCase, refs.badgeNote,
       el('h4', { class: 'sub-title', text: 'プレイ記録' }),
       refs.statsGrid));
 
@@ -150,6 +154,9 @@
         b('トレーナー撃破リセット', () => { S().data.trainers = {}; S().save(); App.ui.toast('トレーナーの げきは記録を リセットしました'); }),
         b('落とし物リセット', () => { S().data.pickups = {}; S().save(); App.ui.toast('ひろったポイントを リセットしました'); }),
         b('ログボ日付リセット', () => { S().data.lastLogin = ''; S().saveNow(); App.ui.toast('再読み込みで ログインボーナスが もらえます'); }),
+        b('バッジ+1', debugBadge),
+        b('リーグリセット', () => { const c = S().resetLeague(); App.ui.toast('リーグの げきは記録を リセットしました（' + c.length + '人）'); }),
+        b('チャンピオン解除', () => { S().clearChampion(); App.ui.toast('チャンピオンの きろくを けしました'); }),
         b('データ検証レポート', showValidation, 'primary')));
   }
 
@@ -175,6 +182,7 @@
       el('span', {}, 'しょじ ', el('b', { text: S().ownedCount() + ' / ' + dexTotal })),
       el('span', {}, 'みつけた ', el('b', { text: String(seen) })),
       el('span', {}, 'ガチャ ', el('b', { text: fmt(d.gacha.totalPulls) + '回' })));
+    refreshBadges();
     refs.statsGrid.innerHTML = '';
     for (const [key, label, unit] of STAT_ROWS) {
       refs.statsGrid.appendChild(el('div', { class: 'stat-tile' },
@@ -206,12 +214,14 @@
     const info = App.data.overrideInfo ? App.data.overrideInfo() : { active: App.data.hasOverrides(), keys: [] };
     if (App.data.hasOverrides()) {
       box.className = 'override-box is-active';
-      box.append(
+      // Node.append は null を「null」という文字として追加するため、空の要素は取り除いてから渡す
+      box.append(...[
         el('div', { class: 'override-status' },
           el('span', { class: 'chip chip-warn', text: info.broken ? '上書きデータ（こわれています）' : 'エディタの上書きデータを使用中' }),
           info.savedAt ? el('small', { class: 'muted', text: 'ほぞん: ' + U().formatDateTime(info.savedAt) }) : null),
         info.keys && info.keys.length ? el('div', { class: 'muted small', text: '対象: ' + info.keys.join(', ') }) : null,
-        App.ui.button('上書きを かいじょ して 標準データに もどす', { variant: 'danger', size: 'sm', onClick: clearOverride }));
+        App.ui.button('上書きを かいじょ して 標準データに もどす', { variant: 'danger', size: 'sm', onClick: clearOverride }),
+      ].filter(Boolean));
     } else {
       box.className = 'override-box';
       box.append(el('span', { class: 'chip', text: '標準データ（data/*.js）を使用中' }));
@@ -339,9 +349,41 @@
   function debugGetAll() {
     let n = 0;
     for (const m of App.data.monsters()) {
-      if (!S().isOwned(m.id)) { S().addMonster(m.id); n++; }
+      if (!(S().ownedInFamily ? S().ownedInFamily(m.id) : S().isOwned(m.id))) { S().addMonster(m.id); n++; }
     }
     App.ui.toast(n ? n + '体の モンスターを てにいれた！' : 'すでに ぜんぶ もっています', { type: 'success' });
+  }
+
+  // バッジケース（4枠。未入手はシルエット、入手日つき）
+  function badgeList() {
+    const list = (window.GameData && Array.isArray(window.GameData.badges)) ? window.GameData.badges.slice() : [];
+    return list.filter((b) => b && b.id).sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+  }
+  function refreshBadges() {
+    const el = U().el;
+    const list = badgeList();
+    refs.badgeCase.innerHTML = '';
+    for (const b of list) {
+      const got = S().hasBadge(b.id);
+      const icon = el('span', { class: ['gm-badge', got ? '' : 'is-empty'] });
+      icon.style.setProperty('--bc', b.color || '#f0c040');
+      const typeName = (App.data.type(b.type) || {}).name || '';
+      refs.badgeCase.appendChild(el('div', { class: ['badge-slot', got ? 'is-got' : ''], title: got ? b.name : '？？？' },
+        icon,
+        el('b', { class: 'badge-name', text: got ? b.name : '？？？' }),
+        el('small', { class: 'badge-date', text: got ? S().badgeDate(b.id) : (typeName ? typeName + 'ジム' : 'みにゅうしゅ') })));
+    }
+    const champ = S().isChampion();
+    const at = champ ? U().today(new Date(Number(S().flag('champion')) || Date.now())) : '';
+    refs.badgeNote.textContent = 'バッジ ' + S().badgeCount() + '/' + list.length + ' ・ Lv上限 ' + S().levelCap()
+      + (champ ? ' ・ チャンピオン（でんどういり ' + at + '）' : '');
+  }
+  function debugBadge() {
+    const next = badgeList().find((b) => !S().hasBadge(b.id));
+    if (!next) { App.ui.toast('バッジは すべて もっています', { type: 'warn' }); return; }
+    S().giveBadge(next.id);
+    sfx('levelup');
+    App.ui.toast(next.name + 'を てにいれた（Lv上限 ' + S().levelCap() + '）', { type: 'success' });
   }
 
   function debugLevelUp() {
@@ -382,7 +424,7 @@
     panel = panelEl;
     build();
     const mark = () => refresh();
-    ['points:changed', 'freepulls:changed', 'collection:changed', 'dex:changed', 'settings:changed', 'state:loaded', 'battle:end', 'gacha:pulled', 'player:renamed']
+    ['points:changed', 'freepulls:changed', 'collection:changed', 'dex:changed', 'settings:changed', 'state:loaded', 'battle:end', 'gacha:pulled', 'player:renamed', 'badges:changed', 'league:champion', 'league:reset']
       .forEach((ev) => App.events.on(ev, mark));
   }
 

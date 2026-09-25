@@ -46,6 +46,7 @@
       dex: { seen: {}, owned: {} },
       trainers: {},
       pickups: {},
+      badges: {},
       flags: {},
       gacha: { history: [], pity: 0, totalPulls: 0 },
       stats: { battles: 0, wins: 0, losses: 0, runs: 0, wildWins: 0, trainerWins: 0, pointsEarned: 0, pointsSpent: 0, steps: 0, loginDays: 0 },
@@ -172,6 +173,9 @@
     }
     if (!DIRS.includes(d.player.dir)) d.player.dir = 'down';
     if (!DIRS.includes(d.respawn.dir)) d.respawn.dir = 'down';
+    for (const id of Object.keys(d.badges)) {
+      if (typeof d.badges[id] !== 'string' || !d.badges[id]) delete d.badges[id];
+    }
     if (d.gacha.history.length > HISTORY_MAX) d.gacha.history = d.gacha.history.slice(-HISTORY_MAX);
     const speeds = Object.keys(cfg().textSpeed || { slow: 1, normal: 1, fast: 1 });
     if (!speeds.includes(d.settings.textSpeed)) d.settings.textSpeed = 'normal';
@@ -252,6 +256,7 @@
     emit('state:reset', {});
     emit('points:changed', { points: data.points, delta: 0, reason: 'reset' });
     emit('freepulls:changed', { freePulls: data.freePulls });
+    emit('badges:changed', { count: badgeCount(), cap: levelCap() });
     emit('party:changed', { party: data.party.slice() });
   }
 
@@ -273,6 +278,7 @@
     emit('state:loaded', {});
     emit('points:changed', { points: data.points, delta: 0, reason: 'import' });
     emit('freepulls:changed', { freePulls: data.freePulls });
+    emit('badges:changed', { count: badgeCount(), cap: levelCap() });
     emit('party:changed', { party: data.party.slice() });
     return true;
   }
@@ -325,13 +331,53 @@
   function ownedCount() { return Object.keys(data.collection).length; }
   function isOwned(id) { return !!owned(id); }
 
+  // 系統内で所持している個体（同じ系統は1体扱い。複数いれば進化の進んだ方）
+  function ownedInFamily(id) {
+    const fam = App.data.familyOf ? App.data.familyOf(id) : [];
+    if (!fam.length) return owned(id);
+    for (let i = fam.length - 1; i >= 0; i--) {
+      const inst = owned(fam[i]);
+      if (inst) return inst;
+    }
+    return null;
+  }
+
+  // 進化: コレクションのキーを from → to に付け替え（SPEC 10.3）
+  function evolve(speciesId) {
+    const inst = owned(speciesId);
+    const ev = inst && App.data.evolutionOf ? App.data.evolutionOf(speciesId) : null;
+    if (!inst || !ev || inst.level < ev.level || owned(ev.to)) return null;
+    const from = speciesId;
+    const to = ev.to;
+    const M = App.monster;
+    const before = M.learnableMoves(inst);
+    const hpBefore = M.stats(inst).hp;
+    delete data.collection[from];
+    inst.speciesId = to;
+    data.collection[to] = inst;
+    const hpAfter = M.stats(inst).hp;
+    if (inst.hp > 0) inst.hp = Math.min(hpAfter, inst.hp + Math.max(0, hpAfter - hpBefore));
+    data.party = data.party.map((id) => (id === from ? to : id));
+    const wasSeen = !!data.dex.seen[to];
+    data.dex.seen[to] = true;
+    data.dex.owned[to] = true;
+    // 進化で新しく覚えられるようになったわざ（呼び出し側で習得処理）
+    const newMoves = M.learnableMoves(inst).filter((id) => !before.includes(id) && !inst.moves.some((m) => m.id === id));
+    save();
+    emit('dex:changed', { speciesId: to, seen: true, owned: true, newlySeen: !wasSeen });
+    emit('collection:changed', { speciesId: to, evolvedFrom: from, isNew: false, limitBreak: inst.limitBreak, refund: 0 });
+    emit('party:changed', { party: data.party.slice() });
+    emit('monster:updated', { speciesId: to });
+    return { from, to, inst, newMoves };
+  }
+
   function addMonster(speciesId, opts) {
     const def = App.data.monster(speciesId);
     if (!def) throw new Error('App.state.addMonster: 未知のモンスター "' + speciesId + '"');
     opts = opts || {};
     const g = gachaCfg();
     const maxLB = Math.max(0, Math.floor(Number(g.maxLimitBreak) || 0));
-    let inst = owned(speciesId);
+    let inst = ownedInFamily(speciesId);
     let isNew = false;
     let refund = 0;
     let joinedParty = false;
@@ -358,16 +404,16 @@
       const hpAfter = App.monster.stats(inst).hp;
       if (inst.hp > 0) inst.hp = Math.min(hpAfter, inst.hp + Math.max(0, hpAfter - hpBefore));
       save();
-      emit('collection:changed', { speciesId, isNew: false, limitBreak: inst.limitBreak, refund: 0 });
-      emit('monster:updated', { speciesId });
+      emit('collection:changed', { speciesId: inst.speciesId, pulledId: speciesId, isNew: false, limitBreak: inst.limitBreak, refund: 0 });
+      emit('monster:updated', { speciesId: inst.speciesId });
     } else {
       const r = App.data.rarity(def.rarity);
       refund = Math.max(0, Math.floor(Number(r && r.refund) || 0));
-      emit('collection:changed', { speciesId, isNew: false, limitBreak: inst.limitBreak, refund });
+      emit('collection:changed', { speciesId: inst.speciesId, pulledId: speciesId, isNew: false, limitBreak: inst.limitBreak, refund });
       if (refund) addPoints(refund, 'refund');
       else save();
     }
-    return { inst, isNew, limitBreak: inst.limitBreak, refund, joinedParty };
+    return { inst, isNew, limitBreak: inst.limitBreak, refund, joinedParty, ownedId: inst.speciesId };
   }
 
   // ---------------------------------------------------------------- パーティ
@@ -444,6 +490,98 @@
   }
   function setTrainerDefeated(id) { data.trainers[id] = today(); save(); }
 
+  // ---------------------------------------------------------------- バッジ・リーグ（SPEC 11）
+  const badgeDefs = () => (window.GameData && Array.isArray(window.GameData.badges) ? window.GameData.badges : []);
+
+  // 入手済みバッジの ID（データの order 順。データから消えたバッジは数えない）
+  function badges() {
+    const own = isPlain(data.badges) ? data.badges : {};
+    return badgeDefs().slice()
+      .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+      .map((b) => b.id)
+      .filter((id) => !!own[id]);
+  }
+  function badgeCount() { return badges().length; }
+  function hasBadge(id) { return badges().includes(id); }
+  function badgeDate(id) { return (isPlain(data.badges) && data.badges[id]) || ''; }
+
+  // 入手済み or 未知の ID なら false
+  function giveBadge(id) {
+    if (!badgeDefs().some((b) => b.id === id) || hasBadge(id)) return false;
+    if (!isPlain(data.badges)) data.badges = {};
+    const capBefore = levelCap();
+    data.badges[id] = today();
+    save();
+    emit('badges:changed', { badgeId: id, count: badgeCount(), capBefore, cap: levelCap() });
+    return true;
+  }
+
+  // debug・テスト用
+  function removeBadge(id) {
+    if (!isPlain(data.badges) || !data.badges[id]) return false;
+    delete data.badges[id];
+    save();
+    emit('badges:changed', { badgeId: id, count: badgeCount(), removed: true, cap: levelCap() });
+    return true;
+  }
+
+  function levelCap() {
+    const c = cfg();
+    const maxLv = c.maxLevel || 100;
+    const caps = Array.isArray(c.levelCaps) ? c.levelCaps.filter((n) => Number(n) >= 1) : [];
+    if (!caps.length) return maxLv;
+    return Math.min(maxLv, Math.floor(Number(caps[Math.min(badgeCount(), caps.length - 1)])));
+  }
+
+  function isChampion() { return !!data.flags.champion; }
+  function setChampion() {
+    const first = !data.flags.champion;
+    if (first) data.flags.champion = Date.now();
+    data.flags.championCount = (Number(data.flags.championCount) || 0) + 1;
+    save();
+    emit('league:champion', { first, at: data.flags.champion });
+    return first;
+  }
+  function clearChampion() {
+    delete data.flags.champion;
+    delete data.flags.championCount;
+    save();
+    emit('league:reset', { champion: false });
+  }
+  // league を持つトレーナーの撃破記録を消す。消した ID を返す
+  function resetLeague() {
+    const all = (window.GameData && isPlain(window.GameData.trainers)) ? window.GameData.trainers : {};
+    const cleared = Object.keys(all).filter((id) => isPlain(all[id]) && all[id].league && data.trainers[id]);
+    cleared.forEach((id) => { delete data.trainers[id]; });
+    save();
+    emit('league:reset', { cleared });
+    return cleared;
+  }
+
+  // あふれ経験値 → ポイント（flags.overflowPts = { date, pts, rest }。1日 overflowDailyMax pt まで）
+  //   rest は pt にならなかった端数の経験値（次回に持ち越し）。戻り値は今回得たポイント
+  function overflowPtsToday() {
+    const o = data.flags.overflowPts;
+    return isPlain(o) && o.date === today() ? Math.max(0, Math.floor(Number(o.pts) || 0)) : 0;
+  }
+  function addOverflowExp(exp) {
+    const c = cfg();
+    const per = Math.max(1, Math.floor(Number(c.overflowExpPerPoint) || 0));
+    const max = Math.max(0, Math.floor(Number(c.overflowDailyMax) || 0));
+    const add = Math.max(0, Math.floor(Number(exp) || 0));
+    if (!add || !per || !max) return 0;
+    const o = isPlain(data.flags.overflowPts) ? data.flags.overflowPts : {};
+    const cur = o.date === today() ? Math.max(0, Math.floor(Number(o.pts) || 0)) : 0;
+    if (cur >= max) return 0;
+    const total = add + Math.max(0, Math.floor(Number(o.rest) || 0));
+    const pts = Math.min(max - cur, Math.floor(total / per));
+    const rest = cur + pts >= max ? 0 : total - pts * per;
+    data.flags.overflowPts = { date: today(), pts: cur + pts, rest };
+    if (pts > 0) addPoints(pts, 'overflow');
+    else save();
+    return pts;
+  }
+
   function isPickupTaken(id) { return !!data.pickups[id]; }
   function takePickup(id) { data.pickups[id] = true; save(); }
 
@@ -501,13 +639,16 @@
     load, save, saveNow, reset, isNewGame,
     points, addPoints, spendPoints,
     freePulls, useFreePull, addFreePulls,
-    owned, ownedList, ownedCount, addMonster,
+    owned, ownedList, ownedCount, addMonster, ownedInFamily, evolve,
     party, partyIds, setParty, addToParty, removeFromParty, moveInParty,
     firstHealthy, hasHealthy, healAll,
     markSeen, isSeen, isOwned,
     flag, setFlag,
     isTrainerDefeated, setTrainerDefeated,
     isPickupTaken, takePickup,
+    badges, badgeCount, hasBadge, badgeDate, giveBadge, removeBadge, levelCap,
+    isChampion, setChampion, clearChampion, resetLeague,
+    addOverflowExp, overflowPtsToday,
     setPlayerPos, setRespawn, setPlayerName,
     setting, setSetting,
     recordGacha, incStat,

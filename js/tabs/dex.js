@@ -30,7 +30,7 @@
 
   // ---------------------------------------------------------------- ヘルパー
   function stateOf(id) {
-    if (S().isOwned(id)) return 'owned';
+    if (S().isOwned(id) || !!(((S().data || {}).dex || {}).owned || {})[id]) return 'owned';   // 進化して手放した種も「てにいれた」扱い
     if (S().isSeen(id)) return 'seen';
     return 'unknown';
   }
@@ -246,7 +246,7 @@
       el('span', { class: 'dx-art' },
         spriteImg(def, 'dx-img'),
         st === 'owned' ? App.ui.rarityBadge(def.rarity) : null,
-        st === 'owned' ? el('span', { class: 'dx-lv', text: 'Lv.' + inst.level }) : null,
+        st === 'owned' && inst ? el('span', { class: 'dx-lv', text: 'Lv.' + inst.level }) : null,
         st === 'seen' ? el('span', { class: 'dx-seen-tag', text: 'みた' }) : null),
       el('span', { class: 'dx-no', text: noText(def) })),
     el('span', { class: 'dx-name', text: st === 'unknown' ? '？？？' : def.name }));
@@ -317,7 +317,7 @@
 
     const metaRow = (label, value) => el('div', { class: 'dx-meta' }, el('span', { text: label }), el('b', { text: value }));
     const stTag = st === 'owned'
-      ? el('span', { class: 'dx-st dx-st-owned', text: 'もっている' })
+      ? el('span', { class: 'dx-st dx-st-owned', text: inst ? 'もっている' : 'しんかずみ' })
       : (st === 'seen' ? el('span', { class: 'dx-st dx-st-seen', text: 'みただけ' }) : el('span', { class: 'dx-st dx-st-unknown', text: 'みはっけん' }));
 
     const info = el('div', { class: 'dx-d-info' },
@@ -400,7 +400,9 @@
     // ガチャ
     const gachaSec = el('section', { class: 'dx-sec dx-sec-gacha' }, el('h4', { class: 'dx-sec-title', text: 'ガチャ' }));
     const hits = gachaInfo(def);
-    if (!hits.length) {
+    if (def.gacha === false && D().preEvolutionOf && D().preEvolutionOf(def.id)) {
+      gachaSec.appendChild(el('p', { class: 'dx-gacha-evo', text: 'しんかで てにいれる' }));
+    } else if (!hits.length) {
       gachaSec.appendChild(el('p', { class: 'dx-empty', text: 'いまは ガチャに でてこない' }));
     } else if (!known) {
       gachaSec.appendChild(el('p', { class: 'dx-gacha-yes', text: 'ガチャで であえる かも…？' }));
@@ -410,6 +412,30 @@
         class: ['dx-banner', b.pickup ? 'is-pickup' : ''],
         style: Array.isArray(b.colors) && b.colors.length ? { '--b1': b.colors[0], '--b2': b.colors[1] || b.colors[0] } : null,
       }, el('span', { class: 'dx-banner-name', text: b.name }), b.pickup ? el('span', { class: 'dx-pickup', text: 'PICK UP' }) : null))));
+    }
+
+    // 進化系統（アイコン → Lv〇〇 → アイコン。未発見は ？？？）
+    let evoSec = null;
+    const family = known && D().familyOf ? D().familyOf(def.id) : [];
+    if (family.length > 1) {
+      const chain = el('div', { class: 'dx-evo' });
+      family.forEach((fid, i) => {
+        const fdef = D().monster(fid);
+        const fknown = stateOf(fid) !== 'unknown';
+        if (i > 0) {
+          const ev = D().evolutionOf(family[i - 1]);
+          chain.appendChild(el('span', { class: 'dx-evo-arrow' }, el('small', { text: ev ? 'Lv' + ev.level : '' }), el('span', { text: '→' })));
+        }
+        const node = el('button', {
+          class: ['dx-evo-node', fid === def.id ? 'is-current' : '', fknown ? '' : 'is-unknown'],
+          type: 'button', disabled: !fknown || fid === def.id, dataset: { species: fid },
+        },
+        el('span', { class: 'dx-evo-art' }, fknown ? spriteImg(fdef, 'dx-evo-img') : el('span', { class: 'dx-evo-img dx-noimg', text: '？' })),
+        el('span', { class: 'dx-evo-name', text: fknown ? fdef.name : '？？？' }));
+        if (fknown && fid !== def.id) node.addEventListener('click', () => { modalCtx.id = fid; sfx('select'); renderDetail(); });
+        chain.appendChild(node);
+      });
+      evoSec = el('section', { class: 'dx-sec dx-sec-evo' }, el('h4', { class: 'dx-sec-title', text: 'しんか' }), chain);
     }
 
     // 前後ナビ
@@ -428,6 +454,7 @@
     body.replaceChildren(
       el('div', { class: 'dx-d-top' }, el('div', { class: 'dx-d-artbox' }, art, viewSeg), info),
       el('div', { class: 'dx-d-cols' }, statsSec, movesSec),
+      ...(evoSec ? [evoSec] : []),
       el('div', { class: 'dx-d-cols' }, locSec, gachaSec),
       nav);
   }

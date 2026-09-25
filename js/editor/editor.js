@@ -74,12 +74,12 @@
   // SPEC 7.9 の BGM 名
   const BGMS = ['title', 'town', 'route', 'forest', 'cave', 'gym', 'battleWild', 'battleTrainer', 'battleBoss', 'victory', 'gacha'];
 
-  const MON_KEYS = ['id', 'no', 'name', 'rarity', 'types', 'baseStats', 'learnset', 'expGroup', 'baseExp', 'image', 'backImage', 'sprite', 'gacha', 'category', 'height', 'weight', 'desc'];
+  const MON_KEYS = ['id', 'no', 'name', 'rarity', 'types', 'baseStats', 'learnset', 'expGroup', 'baseExp', 'image', 'backImage', 'sprite', 'gacha', 'evolution', 'category', 'height', 'weight', 'desc'];
   const MOVE_GROUPS = [['name', 'type', 'category'], ['power', 'accuracy', 'pp', 'priority', 'critStage'], ['effects'], ['desc']];
   const EFFECT_KEYS = ['kind', 'target', 'stat', 'stages', 'status', 'ratio', 'min', 'max', 'chance'];
-  const TRAINER_KEYS = ['name', 'className', 'look', 'image', 'party', 'reward', 'ai', 'boss', 'rematch', 'intro', 'lose', 'win', 'after'];
+  const TRAINER_KEYS = ['name', 'className', 'look', 'image', 'party', 'reward', 'ai', 'boss', 'rematch', 'badge', 'league', 'intro', 'lose', 'win', 'after'];
   const LOOK_KEYS = ['skin', 'hair', 'hairStyle', 'shirt', 'pants', 'hat', 'accent', 'image'];
-  const MAP_KEYS = ['name', 'bgm', 'border', 'indoor', 'tiles', 'encounters', 'warps', 'npcs', 'signs', 'pickups'];
+  const MAP_KEYS = ['name', 'bgm', 'border', 'indoor', 'respawn', 'tiles', 'encounters', 'warps', 'npcs', 'signs', 'pickups'];
   const BANNER_KEYS = ['id', 'name', 'desc', 'rates', 'pool', 'pickup', 'pickupRate', 'colors'];
   const GACHA_KEYS = ['singleCost', 'multiCost', 'multiCount', 'multiGuarantee', 'pityCount', 'pityRarity', 'maxLimitBreak', 'limitBreakBonus', 'startLevel', 'banners'];
   const RARITY_KEYS = ['name', 'color', 'glow', 'stars', 'pointMult', 'refund', 'rainbow'];
@@ -480,12 +480,14 @@
     multi: true, order: MON_KEYS,
     keyComment: (k, v) => {
       if (k === 'baseStats' && isObj(v)) return '合計 ' + STATS.reduce((s, st) => s + (Number(v[st.k]) || 0), 0);
+      if (k === 'evolution' && isObj(v)) { const t = monById(v.to); return 'Lv' + v.level + ' で ' + (t ? t.name || v.to : v.to) + ' に しんか'; }
       return '';
     },
     children: {
       learnset: { lines: true, each: { order: ['lv', 'move'] }, itemComment: (l) => (l && movesObj()[l.move] ? moveName(l.move) : '') },
       baseStats: { order: STATS.map((s) => s.k) },
       sprite: { order: ['shape', 'colors', 'seed'] },
+      evolution: { order: ['to', 'level'] },
     },
   };
   function genMonsters() {
@@ -508,6 +510,7 @@
       'sprite    : 自動生成ドット絵の調整 { shape: 体型, colors: [メイン, サブ, アクセント], seed: 数字 }',
       '            shape: blob / biped / quadruped / bird / fish / serpent / insect / plant / ghost / dragon',
       'gacha     : false にすると ガチャに出なくなる',
+      "evolution : 進化 { to: '進化先のid', level: レベル }（なければ書かない）。進化先は gacha: false・同じレア度にする",
       'category  : 図鑑の分類   height: 高さ(m)   weight: 重さ(kg)   desc: 図鑑の説明文',
     ]);
     s += 'GameData.monsters = [\n';
@@ -621,7 +624,7 @@
     multi: true, order: TRAINER_KEYS,
     children: {
       look: { order: LOOK_KEYS },
-      party: { lines: true, each: { order: ['species', 'level', 'moves'] }, itemComment: (p) => (p && monById(p.species) ? monName(p.species) : '') },
+      party: { lines: true, each: { order: ['species', 'level', 'limitBreak', 'moves'] }, itemComment: (p) => (p && monById(p.species) ? monName(p.species) : '') },
     },
   };
   function genTrainers() {
@@ -630,9 +633,11 @@
       '',
       "name / className（表示: 「className の name」）/ image（バトル立ち絵のパス。'' = 自動生成）",
       "look  : 見た目 { skin, hair, hairStyle: 'short'|'long'|'spiky'|'bald'|'bun', shirt, pants, hat: 色 or null, accent, image }",
-      "party : 手持ち [ { species: 'モンスターID', level: 5, moves: ['わざID', ...]（省略可・4つまで） } ]",
+      "party : 手持ち [ { species: 'モンスターID', level: 5, limitBreak: 凸（省略可・能力強化）, moves: ['わざID', ...]（省略可・4つまで） } ]",
       "reward: 勝利ポイント（省略時 config.rewards.trainerDefault） / ai: 'smart' | 'random' / boss: true でボスBGM",
       "rematch: 'never' | 'daily'（日付が変わると再戦可）",
+      "badge : 勝つと もらえるバッジの id（data/badges.js。ジムリーダー用・1つのバッジは1人だけ）",
+      'league: リーグの順番 1〜4 = 四天王、5 = チャンピオン（回復なしの連戦。負けると 1人目から やりなおし）',
       'intro（話しかけ・発見時）/ lose（プレイヤー勝利時）/ win（プレイヤー敗北時）/ after（撃破後）… 台詞。1要素 = 1ページ',
     ]);
     s += 'GameData.trainers = {\n';
@@ -648,9 +653,10 @@
     groups: [['name', 'bgm', 'border', 'indoor']], order: MAP_KEYS,
     children: {
       tiles: { lines: true },
+      respawn: { order: ['map', 'x', 'y', 'dir'] },
       encounters: { multi: true, order: ['rate', 'table'], children: { table: { lines: true, each: { order: ['species', 'min', 'max', 'weight'] } } } },
-      warps: { lines: true, each: { order: ['x', 'y', 'to', 'tx', 'ty', 'dir', 'requireParty'] } },
-      npcs: { lines: true, each: { order: ['id', 'x', 'y', 'dir', 'look', 'move', 'dialog', 'heal', 'action', 'trainer', 'sight'], children: { look: { order: LOOK_KEYS } } } },
+      warps: { lines: true, each: { order: ['x', 'y', 'to', 'tx', 'ty', 'dir', 'requireParty', 'requireBadges', 'requireTrainer'] } },
+      npcs: { lines: true, each: { order: ['id', 'x', 'y', 'dir', 'look', 'move', 'dialog', 'heal', 'action', 'trainer', 'sight', 'hideAfter', 'requireBadges'], children: { look: { order: LOOK_KEYS } } } },
       signs: OBJ_LINE,
       pickups: { lines: true, each: { order: ['id', 'x', 'y', 'points'] } },
     },
@@ -662,9 +668,12 @@
       '  name（表示名）/ bgm（BGM名）/ border（マップの外に描くタイル記号）/ indoor（室内なら true）',
       '  tiles … 1文字 = 1マス。全行 同じ長さにする。記号の意味は data/tiles.js',
       '  encounters … { rate: 1歩あたりの確率, table: [ { species, min, max, weight } ] }（草むら等で出る野生）',
+      '  respawn … 全滅したときの もどり先 { map, x, y, dir }（省略時は 最後に回復した場所。リーグの部屋などに）',
       '  warps   … [ { x, y, to: 行き先マップID, tx, ty, dir, requireParty: true（手持ちがいないと通れない） } ]',
+      "            requireBadges: n（バッジが n 個ないと通れない）/ requireTrainer: 'トレーナーID'（倒すまで通れない）",
       "  npcs    … [ { id, x, y, dir, look, move: 'still'|'turn'|'wander', dialog: [...] } ]",
       "            heal: true = 回復 / action: 'gacha' = ガチャ誘導 / trainer: 'トレーナーID', sight: 視線のマス数",
+      "            hideAfter: 'トレーナーID'（倒すと消える）/ requireBadges: n（バッジが n 個そろうまで立ちふさがり、そろうと消える）",
       '  signs   … [ { x, y, text: [...] } ]   pickups … [ { id（全マップで一意）, x, y, points } ]',
     ]);
     s += 'GameData.worldStart = ' + inl(G().worldStart, ['map', 'x', 'y', 'dir']) + ';\n\n';
@@ -965,6 +974,9 @@
   // ==================================================================
   function monsterRefs(id) {
     const out = [];
+    monsterList().forEach((m) => {
+      if (m && m.id !== id && isObj(m.evolution) && m.evolution.to === id) out.push('モンスター ' + m.id + '（' + (m.name || '') + '）の進化先 evolution');
+    });
     const tr = trainersObj();
     Object.keys(tr).forEach((tid) => {
       const t = tr[tid];
@@ -985,6 +997,11 @@
   }
   // newId = null なら参照を取り除く
   function replaceMonsterRefs(oldId, newId) {
+    monsterList().forEach((m) => {
+      if (!m || !isObj(m.evolution) || m.evolution.to !== oldId) return;
+      if (newId) m.evolution.to = newId;
+      else delete m.evolution;
+    });
     const tr = trainersObj();
     Object.keys(tr).forEach((tid) => {
       const t = tr[tid];
@@ -1093,6 +1110,46 @@
     if (node) node.replaceWith(Mon.item(m));
   };
 
+  // 進化 evolution: { to, level }（進化先プルダウン＋Lv。なし可）
+  Mon.evolutionField = function (m, changed) {
+    const ev = isObj(m.evolution) ? m.evolution : null;
+    const opts = [{ v: '', label: '（しんかしない）' }].concat(monsterOptions(false).filter((o) => o.v !== m.id));
+    const hintOf = () => {
+      const e = isObj(m.evolution) ? m.evolution : null;
+      if (!e) return { text: '進化先は gacha: false・同じレア度にします', ng: false };
+      const t = monById(e.to);
+      if (!t) return { text: '進化先が見つかりません', ng: true };
+      const probs = [];
+      if (t.gacha !== false) probs.push('進化先がガチャに登場します');
+      if (t.rarity !== m.rarity) probs.push('レア度が違います');
+      if (!(Number.isInteger(e.level) && e.level >= 2)) probs.push('Lv は 2 以上の整数にしてください');
+      return probs.length ? { text: probs.join(' / '), ng: true } : { text: 'Lv' + e.level + ' で ' + (t.name || t.id) + ' に しんか', ng: false };
+    };
+    let f = null;
+    const refresh = () => {
+      const h = hintOf();
+      f._hint.textContent = h.text;
+      f._hint.classList.toggle('ng', h.ng);
+      lvInput.disabled = !m.evolution;
+    };
+    const sel = selectBox(opts, ev ? ev.to : '', (v) => {
+      if (!v) delete m.evolution;
+      else m.evolution = { to: v, level: isObj(m.evolution) && m.evolution.level ? m.evolution.level : (Number(lvInput.value) || 20) };
+      if (m.evolution && !lvInput.value) lvInput.value = String(m.evolution.level);
+      refresh();
+      changed();
+    }, { id: 'ed-mon-evo-to' });
+    const lvInput = inputNum(ev ? ev.level : undefined, (v) => {
+      if (!isObj(m.evolution)) return;
+      m.evolution.level = v === undefined ? undefined : Math.floor(v);
+      refresh();
+      changed();
+    }, { min: 2, step: 1, id: 'ed-mon-evo-lv', class: 'input num', placeholder: 'Lv', style: 'width: 76px' });
+    f = field('進化 evolution', el('div', { class: 'ed-row nowrap' }, el('div', { class: 'grow' }, sel), el('span', { class: 'muted small', text: 'Lv' }), lvInput), { hint: '' });
+    refresh();
+    return f;
+  };
+
   Mon.renderForm = function () {
     const box = refs.monForm;
     if (!box) return;
@@ -1149,6 +1206,7 @@
         field('高さ height（m）', inputNum(m.height, (v) => { setOpt(m, 'height', v); changed(); }, { min: 0, step: 0.1 })),
         field('重さ weight（kg）', inputNum(m.weight, (v) => { setOpt(m, 'weight', v); changed(); }, { min: 0, step: 0.1 })),
         field('ガチャ', checkBox('ガチャに登場する', m.gacha !== false, (c) => { m.gacha = c; changed(); })),
+        Mon.evolutionField(m, changed),
         field('図鑑の説明 desc', textArea(m.desc, (v) => { m.desc = v; changed(); }, { rows: 2 }), { cls: 'span-all' }))));
 
     // ---- 種族値
@@ -1473,6 +1531,7 @@
     m.id = uniqueId(src.id + '_copy', (id) => !!monById(id));
     m.no = freeNo();
     m.name = (src.name || '') + 'コピー';
+    delete m.evolution;   // 同じ進化先を2体が指すと検証エラー（分岐・合流は不可）になるため
     G().monsters.push(m);
     S.sel.monster = m.id;
     touched();
@@ -2199,6 +2258,10 @@
     Object.keys(maps).forEach((mid) => {
       (maps[mid] && Array.isArray(maps[mid].npcs) ? maps[mid].npcs : []).forEach((n) => {
         if (n && n.trainer === id) out.push('マップ ' + mid + '（' + (maps[mid].name || '') + '）の NPC ' + (n.id || '') + ' (' + n.x + ',' + n.y + ')');
+        if (n && n.hideAfter === id) out.push('マップ ' + mid + '（' + (maps[mid].name || '') + '）の NPC ' + (n.id || '') + ' の hideAfter');
+      });
+      (maps[mid] && Array.isArray(maps[mid].warps) ? maps[mid].warps : []).forEach((w) => {
+        if (w && w.requireTrainer === id) out.push('マップ ' + mid + '（' + (maps[mid].name || '') + '）のワープ (' + w.x + ',' + w.y + ') の requireTrainer');
       });
     });
     return out;
@@ -2207,7 +2270,16 @@
     const maps = mapsObj();
     Object.keys(maps).forEach((mid) => {
       const m = maps[mid];
-      if (!m || !Array.isArray(m.npcs)) return;
+      if (!m) return;
+      (Array.isArray(m.warps) ? m.warps : []).forEach((w) => {
+        if (!w || w.requireTrainer !== oldId) return;
+        if (newId) w.requireTrainer = newId; else delete w.requireTrainer;
+      });
+      if (!Array.isArray(m.npcs)) return;
+      m.npcs.forEach((n) => {
+        if (!n || n.hideAfter !== oldId) return;
+        if (newId) n.hideAfter = newId; else delete n.hideAfter;
+      });
       if (newId) m.npcs.forEach((n) => { if (n && n.trainer === oldId) n.trainer = newId; });
       else m.npcs = m.npcs.filter((n) => !(n && n.trainer === oldId));
     });
@@ -2329,6 +2401,8 @@
           field('AI', selectBox(AIS, t.ai || 'smart', (v) => { t.ai = v; changed(); })),
           field('再戦 rematch', selectBox(REMATCH, t.rematch || 'never', (v) => { t.rematch = v; changed(); })),
           field('ボス', checkBox('ボスBGMにする', !!t.boss, (c) => { t.boss = c; changed(); })),
+          field('バッジ badge', selectBox([{ v: '', label: '（なし）' }].concat((Array.isArray(G().badges) ? G().badges : []).map((b) => ({ v: b.id, label: (b.name || b.id) + '（' + b.id + '）' }))), t.badge || '', (v) => { setOpt(t, 'badge', v); changed(); }), { hint: '勝つと もらえる（ジムリーダー用・data/badges.js）' }),
+          field('リーグ league', selectBox([{ v: '', label: '（なし）' }, { v: 1, label: '1 四天王' }, { v: 2, label: '2 四天王' }, { v: 3, label: '3 四天王' }, { v: 4, label: '4 四天王' }, { v: 5, label: '5 チャンピオン' }], t.league || '', (v) => { setOpt(t, 'league', v ? Number(v) : undefined); changed(); }), { hint: '回復なしの連戦。負けると 1人目から' }),
           field('バトル立ち絵 image（空欄=自動生成）', inputText(t.image, (v) => { t.image = v.trim(); changed(true); }, { class: 'input mono', placeholder: 'assets/characters/xxx.png' }), { cls: 'span-2' })),
         usedIn.length ? el('p', { class: 'ed-hint', text: '登場: ' + usedIn.join(' / ') }) : el('p', { class: 'ed-hint warn', text: 'まだ どのマップにも配置されていません（マップの npcs に { "trainer": "' + id + '" } を追加すると登場します）' })),
       card('見た目 look',
@@ -2405,6 +2479,8 @@
         selectBox(monsterOptions(false), p.species, (v) => { p.species = v; redraw(); }, { style: 'width:auto;max-width:260px' }),
         el('span', { class: 'lbl', text: 'Lv' }),
         inputNum(p.level, (v) => { p.level = v === undefined ? undefined : Math.floor(v); if (p.level === undefined) delete p.level; changed(); }, { class: 'input num', min: 1, max: maxLv, step: 1 }),
+        el('span', { class: 'lbl', text: '凸', title: 'limitBreak（能力強化）' }),
+        inputNum(p.limitBreak, (v) => { setOpt(p, 'limitBreak', v === undefined ? undefined : Math.max(0, Math.floor(v))); if (!p.limitBreak) delete p.limitBreak; changed(); }, { class: 'input num', min: 0, max: Number((G().gacha || {}).maxLimitBreak) || 5, step: 1, placeholder: '0', title: 'limitBreak（凸・能力強化。省略 = 0）' }),
         movesWrap,
         el('span', { class: 'ops' },
           iconBtn('↑', '上へ', () => { [party[i - 1], party[i]] = [party[i], party[i - 1]]; redraw(); }, i === 0),
@@ -2476,6 +2552,8 @@
   Tr.duplicate = function (id) {
     const newId = uniqueId(id + '_copy', (x) => hasOwn(trainersObj(), x));
     trainersObj()[newId] = clone(trainersObj()[id]);
+    delete trainersObj()[newId].badge;    // 同じバッジ・リーグ順を2人に付けると検証エラー/警告になるため
+    delete trainersObj()[newId].league;
     S.sel.trainer = newId;
     touched();
     rerender();
@@ -2510,8 +2588,9 @@
     caveFloor: '#8a7058', caveFloorSafe: '#a08870', caveWall: '#4a3a2a', void: '#000000',
   };
   const MAP_JSON = [
-    { k: 'warps', label: 'ワープ warps', type: 'array', hint: '{ "x", "y", "to": 行き先マップID, "tx", "ty", "dir", "requireParty": true }  乗った瞬間に移動' },
-    { k: 'npcs', label: 'NPC npcs', type: 'array', hint: '{ "id", "x", "y", "dir", "look": {...}, "move": "still|turn|wander", "dialog": [...] } / "heal": true / "action": "gacha" / "trainer": "ID", "sight": 4' },
+    { k: 'warps', label: 'ワープ warps', type: 'array', hint: '{ "x", "y", "to": 行き先マップID, "tx", "ty", "dir", "requireParty": true, "requireBadges": 2（バッジ2個で通れる）, "requireTrainer": "ID"（倒すと通れる） }  乗った瞬間に移動' },
+    { k: 'npcs', label: 'NPC npcs', type: 'array', hint: '{ "id", "x", "y", "dir", "look": {...}, "move": "still|turn|wander", "dialog": [...] } / "heal": true / "action": "gacha" / "trainer": "ID", "sight": 4 / "hideAfter": "ID" / "requireBadges": 3（3個そろうまで通せんぼ）' },
+    { k: 'respawn', label: '全滅時のもどり先 respawn', type: 'object', hint: '{ "map": "マップID", "x", "y", "dir" }  空欄 = 最後に回復した場所（リーグの部屋などに設定）' },
     { k: 'signs', label: '看板 signs', type: 'array', hint: '{ "x", "y", "text": ["1ページ目", "2ページ目"] }' },
     { k: 'pickups', label: '落ちているポイント pickups', type: 'array', hint: '{ "id": 全マップで一意, "x", "y", "points": 50 }' },
     { k: 'encounters', label: '野生モンスター encounters', type: 'object', hint: '{ "rate": 0.12, "table": [ { "species": "ID", "min": 2, "max": 4, "weight": 50 } ] }  空欄 = 出現なし' },

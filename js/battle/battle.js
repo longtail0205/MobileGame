@@ -34,6 +34,7 @@
   const el = (...a) => App.util.el(...a);
   const Eng = () => App.battleEngine;
   const cfg = () => (App.data && App.data.config) || {};
+  const LEAGUE_CHAMPION = 5;   // trainers の league: 1〜4 四天王、5 チャンピオン
   const fainted = (inst) => !inst || !(inst.hp > 0);
   const other = (side) => (side === 'player' ? 'enemy' : 'player');
   const dname = (inst) => App.monster.displayName(inst);
@@ -356,7 +357,7 @@
     setLevel(h, inst.level);
     setStatusBadge(h, inst.status);
     setHpBar(h, inst.hp, App.monster.stats(inst).hp);
-    if (h.exp) setExpBar(h, App.monster.expProgress(inst));
+    if (h.exp) setExpBar(h, App.monster.expProgress(inst, side === 'player' ? curCap() : 0));
   }
   function hudOut(side) {
     const h = hud(side);
@@ -1185,9 +1186,10 @@
   async function applyExp(s) {
     const b = ctx.b;
     const inst = s.inst;
+    const cap = curCap();
     const isActive = inst === b.player.battler.inst;
-    const beforeProg = App.monster.expProgress(inst);
-    const r = App.monster.addExp(inst, s.amount);
+    const beforeProg = App.monster.expProgress(inst, cap);
+    const r = App.monster.addExp(inst, s.amount, { cap });
     if (isActive) {
       const h = hud('player');
       if (r.levelsGained > 0) {
@@ -1196,9 +1198,9 @@
         setHud('player', inst);
         setExpBar(h, 0);
         anim(h.root, [{ filter: 'brightness(1)' }, { filter: 'brightness(1.7)' }, { filter: 'brightness(1)' }], { duration: 420 });
-        await animateExpTo(h, 0, App.monster.expProgress(inst), 400);
+        await animateExpTo(h, 0, App.monster.expProgress(inst, cap), 400);
       } else {
-        const to = App.monster.expProgress(inst);
+        const to = App.monster.expProgress(inst, cap);
         await animateExpTo(h, beforeProg, to, Math.max(200, 700 * (to - beforeProg)));
       }
     }
@@ -1224,21 +1226,49 @@
   }
 
   // 倒した敵の経験値を配分（場に出たもの → 控え の順）
+  //   追いつきボーナス（catchUpMult）を掛け、レベル上限（App.state.levelCap）で止める。
+  //   上限であふれた経験値は ctx.overflowExp に貯め、outro でポイントに変換する（SPEC 11.3）
+  function curCap() {
+    const maxLv = cfg().maxLevel || 100;
+    try { return App.state.levelCap ? App.state.levelCap() : maxLv; } catch (e) { return maxLv; }
+  }
+  function boosted(s) {
+    const mult = App.monster.catchUpMult ? App.monster.catchUpMult(s.inst.level, curCap()) : 1;
+    return { inst: s.inst, amount: Math.max(0, Math.floor(s.amount * mult)), bonus: mult > 1 };
+  }
+  // 上限に達したときのメッセージ（1バトル1回）
+  async function capNotice(inst) {
+    if (ctx.capNoticed) return;
+    ctx.capNoticed = true;
+    await say(dname(inst) + 'は いまは\nこれいじょう レベルが あがらない', { wait: true });
+  }
   async function gainExp(enemyIndex) {
-    const shares = Eng().expShares(ctx.b, enemyIndex);
-    const parts = shares.filter((s) => s.participant);
-    const bench = shares.filter((s) => !s.participant);
+    const raw = Eng().expShares(ctx.b, enemyIndex);
+    const parts = raw.filter((s) => s.participant).map(boosted);
+    const bench = raw.filter((s) => !s.participant).map(boosted);
+    const cap = curCap();
+    ctx.overflowExp = ctx.overflowExp || 0;
     for (const s of parts) {
-      await say(dname(s.inst) + 'は\n' + fmt(s.amount) + ' けいけんちを もらった！', { hold: true });
+      if (s.inst.level >= cap) {
+        const r = await applyExp(s);
+        ctx.overflowExp += r.overflow || 0;
+        await capNotice(s.inst);
+        continue;
+      }
+      await say(dname(s.inst) + (s.bonus ? 'は ボーナスで\n' : 'は\n') + fmt(s.amount) + ' けいけんちを もらった！', { hold: true });
       const r = await applyExp(s);
+      ctx.overflowExp += r.overflow || 0;
       await waitA();
       await levelUpMessages(s.inst, r, true);
+      if (r.capped) await capNotice(s.inst);
     }
     if (bench.length) {
       await say('てもちの モンスターたちも\nけいけんちを もらった！', { wait: true });
       for (const s of bench) {
         const r = await applyExp(s);
+        ctx.overflowExp += r.overflow || 0;
         await levelUpMessages(s.inst, r, false);
+        if (r.capped && r.levelsGained > 0) await capNotice(s.inst);
       }
     }
   }
@@ -1395,6 +1425,105 @@
     await say(playerName() + 'は\n' + fmt(pts) + 'ポイント てにいれた！', { wait: true });
   }
 
+  // ---------------------------------------------------------------- 進化（SPEC 10.4）
+  // このバトルでレベルが上がり、進化条件を満たした個体を順に進化させる
+  async function evolutions() {
+    const b = ctx.b;
+    const startLv = ctx.startLevels;
+    if (!App.monster.canEvolve || !App.state.evolve || !startLv) return;
+    for (const inst of (b ? b.player.party : [])) {
+      if (!inst || !startLv.has(inst) || !(inst.level > startLv.get(inst))) continue;
+      if (App.state.owned(inst.speciesId) !== inst) continue;
+      const toId = App.monster.canEvolve(inst);
+      if (toId) await evolveScene(inst, toId);
+    }
+  }
+
+  function evoSprite(speciesId) {
+    const img = el('img', { class: 'bt-evo-img', alt: '', draggable: 'false' });
+    try {
+      const sp = App.sprites && App.sprites.monsterSprite ? App.sprites.monsterSprite(speciesId, 'front') : null;
+      img.src = sp && sp.src ? sp.src : '';
+      img.classList.toggle('is-flip', !!(sp && sp.flip));
+    } catch (e) { /* 無視 */ }
+    return img;
+  }
+
+  // 「おや…？」→ 白く点滅しながら進化前/後のシルエットが交互 → 進化（B でキャンセル）
+  async function evolveScene(inst, toId) {
+    const fromId = inst.speciesId;
+    const name = dname(inst);
+    const toDef = App.data.monster(toId);
+    const fromImg = evoSprite(fromId);
+    const toImg = evoSprite(toId);
+    toImg.classList.add('is-hidden');
+    const stage = el('div', { class: 'bt-evo-mon' }, fromImg, toImg);
+    const evo = el('div', { class: 'bt-evo' }, stage);
+    ui.cmd.hidden = true;
+    ui.moves.hidden = true;
+    ui.root.insertBefore(evo, ui.msg);
+    await anim(evo, [{ opacity: 0 }, { opacity: 1 }], { duration: 400, fill: 'forwards' });
+    await say('おや…？ ' + name + 'の\nようすが…！', { wait: true });
+
+    let cancelled = false;
+    phase = 'evolve';
+    mode = { onPress(a) { if (a === 'b' && !cancelled) { cancelled = true; sfx('cancel'); } } };
+    sfx('statUp');
+    stage.classList.add('is-glow');
+    const steps = 16;
+    for (let i = 0; i < steps && !cancelled; i++) {
+      const showTo = i % 2 === 1;
+      fromImg.classList.toggle('is-hidden', showTo);
+      toImg.classList.toggle('is-hidden', !showTo);
+      if (i % 4 === 0) flash('#fff', 260, 0.55);
+      await wait(Math.max(90, 420 - i * 22));
+    }
+    mode = null;
+    phase = 'anim';
+    stage.classList.remove('is-glow');
+
+    if (cancelled) {
+      fromImg.classList.remove('is-hidden');
+      toImg.classList.add('is-hidden');
+      await say('……おや？ へんかが とまった！', { wait: true });
+      await say(name + 'は しんかしなかった。', { wait: true });
+    } else {
+      flash('#fff', 700, 1);
+      await wait(250);
+      fromImg.classList.add('is-hidden');
+      toImg.classList.remove('is-hidden');
+      const r = App.state.evolve(fromId);
+      if (r) {
+        sfx('levelup');
+        await say('おめでとう！ ' + name + 'は\n' + (toDef ? toDef.name : toId) + 'に しんかした！', { wait: true });
+        await learnEvolutionMoves(inst, r.newMoves || []);
+      } else {
+        fromImg.classList.remove('is-hidden');
+        toImg.classList.add('is-hidden');
+      }
+    }
+    await anim(evo, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' });
+    evo.remove();
+  }
+
+  // 進化で新しく覚えられるわざ: 空き枠があれば習得、4つ埋まっていれば へんせい画面で入れ替え
+  async function learnEvolutionMoves(inst, ids) {
+    const name = dname(inst);
+    for (const id of ids) {
+      if (inst.moves.some((m) => m.id === id)) continue;
+      if (inst.moves.length < 4) {
+        inst.moves.push({ id, pp: App.monster.maxPP(id) });
+        App.state.save();
+        emit('monster:updated', { speciesId: inst.speciesId });
+        sfx('levelup');
+        await say(name + 'は あたらしく\n' + moveName(id) + 'を おぼえた！', { wait: true });
+      } else {
+        await say(name + 'は ' + moveName(id) + 'を\nおぼえたいが わざが いっぱいだ！', { wait: true });
+        await say('へんせい画面で わざを いれかえられます', { wait: true });
+      }
+    }
+  }
+
   async function outro(result) {
     const b = ctx.b;
     const t = ctx.trainer;
@@ -1412,8 +1541,19 @@
         if (ctx.trainerId) App.state.setTrainerDefeated(ctx.trainerId);
         await giveReward(rw, 'trainer');
       }
+      await overflowReward(true);
+      if (b.kind === 'trainer' && t && t.badge) await badgeScene(t.badge);
+      await evolutions();
+      if (b.kind === 'trainer' && t && Number(t.league) === LEAGUE_CHAMPION && App.state.setChampion) {
+        const first = App.state.setChampion();
+        await hallOfFame(first);
+      }
     } else if (result === 'lose') {
       App.state.incStat('losses');
+      // リーグ内の敗北は 1人目からやり直し（field の全滅処理より前にリセット）
+      const inLeague = b.kind === 'trainer' && t && t.league && App.state.resetLeague;
+      if (inLeague) App.state.resetLeague();
+      await overflowReward(false);
       try { if (App.audio && App.audio.stopBgm) App.audio.stopBgm(); } catch (e) { /* 無視 */ }
       sfx('lose');
       await say(playerName() + 'の てもちには\nたたかえる モンスターが いない！', { wait: true });
@@ -1421,9 +1561,101 @@
         await trainerSlideBack();
         for (const line of (t && Array.isArray(t.win) ? t.win : [])) await say(line, { wait: true });
       }
+      if (inLeague) await say('ガチャモンリーグへの ちょうせんは\nさいしょから やりなおしだ…', { wait: true });
     } else {
       App.state.incStat('runs');
+      await overflowReward(false);
     }
+  }
+
+  // ---------------------------------------------------------------- あふれ経験値・バッジ・殿堂入り（SPEC 11.3）
+  // このバトルで上限によりあふれた経験値をポイントに変換（1日の上限は App.state が管理）
+  async function overflowReward(show) {
+    const exp = ctx.overflowExp || 0;
+    ctx.overflowExp = 0;
+    if (!(exp > 0) || !App.state.addOverflowExp) return;
+    const pts = App.state.addOverflowExp(exp);
+    if (!show) return;
+    if (pts > 0) {
+      sfx('coin');
+      rewardPop(pts);
+      await say('あふれた けいけんちが\n' + fmt(pts) + 'ポイントに なった！', { wait: true });
+    } else if (App.state.overflowPtsToday() >= (Number(cfg().overflowDailyMax) || 0)) {
+      if (!ctx.overflowMaxNoticed) await say('あふれた けいけんちは きょうは\nもう ポイントに ならない', { wait: true });
+      ctx.overflowMaxNoticed = true;
+    }
+  }
+
+  function badgeDef(id) {
+    const list = (window.GameData && Array.isArray(window.GameData.badges)) ? window.GameData.badges : [];
+    return list.find((x) => x && x.id === id) || null;
+  }
+  // バッジの見た目（css/base.css の .gm-badge を battle / settings で共用）
+  function badgeIcon(bd, cls) {
+    const node = el('span', { class: 'gm-badge' + (cls ? ' ' + cls : '') });
+    node.style.setProperty('--bc', (bd && bd.color) || '#f0c040');
+    return node;
+  }
+
+  async function badgeScene(badgeId) {
+    const bd = badgeDef(badgeId);
+    if (!bd || !App.state.giveBadge || App.state.hasBadge(badgeId)) return;
+    const capBefore = curCap();
+    const icon = badgeIcon(bd, 'is-big');
+    const box = el('div', { class: 'bt-badge-get' }, el('div', { class: 'bt-badge-shine' }), icon);
+    ui.cmd.hidden = true;
+    ui.moves.hidden = true;
+    ui.root.insertBefore(box, ui.msg);
+    await anim(box, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, fill: 'forwards' });
+    anim(icon, [
+      { transform: 'scale(0.2) rotate(-200deg)', opacity: 0 },
+      { transform: 'scale(1.2) rotate(10deg)', opacity: 1, offset: 0.7 },
+      { transform: 'scale(1) rotate(0)', opacity: 1 }], { duration: 700, easing: 'ease-out', fill: 'forwards' });
+    sfx('gachaSSR');
+    App.state.giveBadge(badgeId);
+    await say(playerName() + 'は ' + trainerName() + 'から\n' + (bd.name || badgeId) + 'を てにいれた！', { wait: true });
+    const cap = curCap();
+    if (cap > capBefore) {
+      sfx('levelup');
+      await say('モンスターの レベルの じょうげんが\n' + cap + 'に あがった！', { wait: true });
+    }
+    await anim(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' });
+    box.remove();
+  }
+  function trainerName() { return (ctx.trainer && ctx.trainer.name) || ctx.trainerLabel || ''; }
+
+  // 殿堂入り: パーティのモンスターを並べる → 「おめでとう！」 → クレジット風
+  async function hallOfFame(first) {
+    const party = App.state.party();
+    const row = el('div', { class: 'bt-hof-row' });
+    const cards = party.map((inst) => {
+      const card = el('div', { class: 'bt-hof-card' }, evoSprite(inst.speciesId),
+        el('b', { text: dname(inst) }), el('small', { text: 'Lv' + inst.level }));
+      row.appendChild(card);
+      return card;
+    });
+    const title = el('div', { class: 'bt-hof-title', text: 'でんどういり' });
+    const credits = el('div', { class: 'bt-hof-credits' },
+      el('p', { text: 'ガチャモンリーグ チャンピオン' }),
+      el('p', { class: 'is-name', text: playerName() }),
+      el('p', { text: App.util.today ? App.util.today() : '' }),
+      el('p', { text: 'ガチャモン' }),
+      el('p', { text: 'THANK YOU FOR PLAYING!' }));
+    const hof = el('div', { class: 'bt-hof' }, title, row, credits);
+    ui.cmd.hidden = true;
+    ui.moves.hidden = true;
+    ui.root.insertBefore(hof, ui.msg);
+    bgm('victory');
+    await anim(hof, [{ opacity: 0 }, { opacity: 1 }], { duration: 600, fill: 'forwards' });
+    sfx('gachaUR');
+    for (const card of cards) {
+      anim(card, [{ transform: 'translateY(40px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 360, easing: 'ease-out', fill: 'forwards' });
+      await wait(220);
+    }
+    await say('おめでとう！ ' + playerName() + 'は\nリーグの チャンピオンに なった！', { wait: true });
+    await say(first ? 'でんどういりの きろくに\nモンスターたちの なまえが きざまれた！' : 'ふたたび でんどういりの きろくが\nきざまれた！', { wait: true });
+    hof.classList.add('is-credits');
+    await say('ここまで あそんでくれて\nありがとう！', { wait: true });
   }
 
   function restoreBgm(prev) {
@@ -1455,6 +1687,7 @@
         kind: c.kind, playerParty: party, enemyParty: c.enemyParty, ai: c.ai,
         trainerLabel: c.trainerLabel, rng: c.opts && c.opts.rng,
       });
+      c.startLevels = new Map(party.map((p) => [p, p.level]));
       App.state.incStat('battles');
       emit('battle:start', c.kind === 'trainer' ? { kind: 'trainer', trainerId: c.trainerId } : { kind: 'wild' });
       build(c);
@@ -1530,7 +1763,7 @@
     if (!t) return Promise.reject(new Error('App.battle.startTrainer: 未知のトレーナー "' + trainerId + '"'));
     const enemyParty = (Array.isArray(t.party) ? t.party : [])
       .filter((p) => p && App.data.monster(p.species))
-      .map((p) => App.monster.create(p.species, p.level || 5, { moves: p.moves }));
+      .map((p) => App.monster.create(p.species, p.level || 5, { moves: p.moves, limitBreak: p.limitBreak }));
     if (!enemyParty.length) return Promise.reject(new Error('App.battle.startTrainer: トレーナー "' + trainerId + '" の手持ちが空です'));
     if (!App.state.hasHealthy()) {
       console.warn('[battle] たたかえるモンスターがいないため バトルを開始しません');

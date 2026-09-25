@@ -513,3 +513,64 @@
   background: linear-gradient(135deg, #b8f0ff, #40a0f0 50%, #2060c0);
   clip-path: polygon(50% 0, 100% 40%, 50% 100%, 0 40%);
 }
+
+/* ---- 進化演出（SPEC 10.4） */
+.bt-evo {
+  position: absolute; inset: 0; z-index: 9; opacity: 0;
+  background: radial-gradient(circle at 50% 38%, #40507a 0%, #182038 55%, #080c18 100%);
+}
+.bt-evo-mon { position: absolute; left: 264px; top: 60px; width: 192px; height: 192px; }
+.bt-evo-img { position: absolute; inset: 0; display: block; width: 192px; height: 192px; object-fit: contain; image-rendering: pixelated; }
+.bt-evo-img.is-flip { transform: scaleX(-1); }
+.bt-evo-img.is-hidden { visibility: hidden; }
+.bt-evo-img[src=''] { visibility: hidden; }
+.bt-evo-mon.is-glow .bt-evo-img { filter: brightness(0) invert(1) drop-shadow(0 0 12px #fff); }
+
+/* ---- バッジ入手（SPEC 11.3） */
+.bt-badge-get {
+  position: absolute; inset: 0; z-index: 9; opacity: 0;
+  background: radial-gradient(circle at 50% 36%, rgba(255, 244, 192, 0.55) 0%, rgba(24, 32, 56, 0.85) 60%, rgba(8, 12, 24, 0.92) 100%);
+}
+.bt-badge-shine {
+  position: absolute; left: 240px; top: 36px; width: 240px; height: 240px; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.28) 0 10deg, transparent 10deg 30deg);
+  animation: bt-badge-spin 6s linear infinite;
+}
+.bt-badge-get .gm-badge.is-big { position: absolute; left: 300px; top: 96px; width: 120px; height: 120px; }
+@keyframes bt-badge-spin { to { transform: rotate(360deg); } }
+
+/* ---- 殿堂入り（チャンピオン撃破） */
+.bt-hof {
+  position: absolute; inset: 0; z-index: 9; opacity: 0; overflow: hidden;
+  background: linear-gradient(180deg, #2a1a48 0%, #101830 60%, #05070f 100%);
+}
+.bt-hof::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 0, rgba(255, 220, 120, 0.35), transparent 60%);
+}
+.bt-hof-title {
+  position: absolute; left: 0; right: 0; top: 18px; text-align: center;
+  font-size: 36px; letter-spacing: 12px; color: #ffe070;
+  text-shadow: 0 3px 0 #7a4a00, 0 0 18px rgba(255, 220, 100, 0.7);
+}
+.bt-hof-row {
+  position: absolute; left: 12px; right: 12px; top: 84px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px;
+}
+.bt-hof-card {
+  width: 104px; opacity: 0; text-align: center; color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+}
+.bt-hof-card .bt-evo-img { position: static; width: 96px; height: 96px; }
+.bt-hof-card b, .bt-hof-card small { line-height: 1.3; }
+.bt-hof-card b { font-size: 18px; font-weight: normal; white-space: nowrap; overflow: hidden; max-width: 104px; }
+.bt-hof-card small { font-size: 16px; color: #ffe9a0; }
+.bt-hof-credits {
+  position: absolute; left: 0; right: 0; top: 480px; text-align: center; color: #e8ecff;
+  font-size: 22px; line-height: 1.9; text-shadow: 0 2px 0 #000;
+}
+.bt-hof-credits p { margin: 0; }
+.bt-hof-credits .is-name { font-size: 30px; color: #ffe070; }
+.bt-hof.is-credits .bt-hof-row { transition: opacity 0.8s; opacity: 0.1; }
+.bt-hof.is-credits .bt-hof-credits { animation: bt-hof-roll 9s linear forwards; }
+@keyframes bt-hof-roll { from { top: 340px; } to { top: 40px; } }

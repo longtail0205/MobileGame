@@ -367,3 +367,19 @@
   .dx-move { grid-template-columns: 38px minmax(0, 1fr) 58px 40px; }
   .dx-move > :nth-child(5), .dx-move > :nth-child(6) { display: none; }
 }
+
+/* 進化系統 */
+.dx-sec-evo { margin-top: 12px; }
+.dx-evo { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+.dx-evo-node { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px; padding: 6px 8px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; background: rgba(255, 255, 255, 0.05); color: inherit; font: inherit; cursor: pointer; }
+.dx-evo-node:disabled { cursor: default; }
+.dx-evo-node.is-current { border-color: var(--gold); background: rgba(255, 216, 77, 0.12); }
+.dx-evo-node.is-unknown { opacity: 0.6; }
+.dx-evo-art { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; }
+.dx-evo-img { max-width: 56px; max-height: 56px; image-rendering: pixelated; }
+.dx-evo-img.is-flip { transform: scaleX(-1); }
+.dx-evo-img.dx-noimg { font-size: 22px; }
+.dx-evo-name { font-size: 12px; }
+.dx-evo-arrow { display: flex; flex-direction: column; align-items: center; font-size: 16px; opacity: 0.85; }
+.dx-evo-arrow small { font-size: 11px; color: var(--gold); }
+.dx-gacha-evo { margin: 0 0 8px; font-size: 13px; color: #9fe0ff; }

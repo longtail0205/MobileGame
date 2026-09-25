@@ -80,12 +80,18 @@
   }
 
   // 種族の わざID → 最初に覚えるレベル
+  // （進化後の種は系統の進化前の learnset も含める）
   function learnLevels(def) {
     const out = {};
-    for (const l of (def && Array.isArray(def.learnset) ? def.learnset : [])) {
-      if (!l || !l.move) continue;
-      const lv = Number(l.lv) || 1;
-      if (out[l.move] === undefined || lv < out[l.move]) out[l.move] = lv;
+    const fam = def && D().familyOf ? D().familyOf(def.id) : [];
+    const idx = fam.indexOf(def && def.id);
+    const defs = idx > 0 ? fam.slice(0, idx + 1).map((id) => D().monster(id)) : [def];
+    for (const d of defs) {
+      for (const l of (d && Array.isArray(d.learnset) ? d.learnset : [])) {
+        if (!l || !l.move) continue;
+        const lv = Number(l.lv) || 1;
+        if (out[l.move] === undefined || lv < out[l.move]) out[l.move] = lv;
+      }
     }
     return out;
   }
@@ -140,9 +146,20 @@
       App.events.on('collection:changed', (p) => {
         // 入手時点で覚えられるわざは「確認済み」として記録（NEW表示はレベルアップ後の新わざのみ）
         if (p && p.isNew && p.speciesId) markMovesSeen(S().owned(p.speciesId));
+        // 進化: 確認済みわざの記録と選択中の個体を進化後の ID に引き継ぐ
+        if (p && p.evolvedFrom && p.speciesId) {
+          const map = seenMap();
+          if (map && Array.isArray(map[p.evolvedFrom])) {
+            const next = Object.assign({}, map);
+            next[p.speciesId] = next[p.evolvedFrom];
+            delete next[p.evolvedFrom];
+            S().setFlag(SEEN_FLAG, next);
+          }
+          if (selectedId === p.evolvedFrom) selectedId = p.speciesId;
+        }
         mark();
       });
-      ['party:changed', 'monster:updated', 'state:loaded', 'state:reset'].forEach((ev) => App.events.on(ev, mark));
+      ['party:changed', 'monster:updated', 'state:loaded', 'state:reset', 'badges:changed'].forEach((ev) => App.events.on(ev, mark));
     }
     markDirty();
   }
@@ -158,9 +175,10 @@
 
     // パーティ
     refs.partyCount = el('span', { class: 'pt-count' });
+    refs.capInfo = el('span', { class: 'pt-cap', title: 'ジムバッジを あつめると レベルの じょうげんが あがります' });
     refs.partyList = el('div', { class: 'pt-party-list' });
     refs.party = el('section', { class: 'panel pt-party' },
-      el('h3', { class: 'section-title' }, el('span', { class: 'section-icon', text: '★' }), 'パーティ', refs.partyCount,
+      el('h3', { class: 'section-title' }, el('span', { class: 'section-icon', text: '★' }), 'パーティ', refs.partyCount, refs.capInfo,
         el('span', { class: 'pt-hint', text: 'ドラッグで ならびかえ' })),
       refs.partyList);
 
@@ -287,6 +305,9 @@
     const ids = S().partyIds();
     const max = partyMax();
     refs.partyCount.textContent = ids.length + ' / ' + max;
+    const badgeTotal = (window.GameData && Array.isArray(window.GameData.badges)) ? window.GameData.badges.length : 0;
+    refs.capInfo.hidden = !S().levelCap;
+    if (S().levelCap) refs.capInfo.textContent = 'Lv上限 ' + S().levelCap() + (badgeTotal ? '（バッジ ' + S().badgeCount() + '/' + badgeTotal + '）' : '');
     const nodes = [];
     for (let i = 0; i < max; i++) {
       const inst = ids[i] ? S().owned(ids[i]) : null;
@@ -534,6 +555,8 @@
     const inParty = S().partyIds().includes(inst.speciesId);
     const name = M().displayName(inst);
     const isMax = inst.level >= maxLv;
+    const cap = S().levelCap ? S().levelCap() : maxLv;
+    const isCap = !isMax && inst.level >= cap;
     const newList = newMoves(inst);
 
     const renameBtn = el('button', { class: 'pt-rename', type: 'button', title: 'ニックネームを かえる', 'aria-label': 'ニックネームを かえる', text: '✎' });
@@ -551,8 +574,8 @@
           statusChip(inst)),
         el('div', { class: 'pt-d-exp' },
           el('span', { class: 'pt-d-explabel', text: 'EXP' }),
-          el('span', { class: 'pt-d-exptrack' }, el('span', { class: 'pt-d-expfill', style: { width: (M().expProgress(inst) * 100).toFixed(1) + '%' } }))),
-        el('div', { class: 'pt-d-expnote', text: isMax ? 'レベル MAX！' : 'つぎの Lvまで あと ' + U().formatNumber(M().expToNext(inst)) + ' EXP' }),
+          el('span', { class: ['pt-d-exptrack', isCap ? 'is-cap' : ''] }, el('span', { class: 'pt-d-expfill', style: { width: (M().expProgress(inst, cap) * 100).toFixed(1) + '%' } }), isCap ? el('span', { class: 'pt-d-expmax', text: 'MAX' }) : null)),
+        el('div', { class: ['pt-d-expnote', isCap ? 'is-cap' : ''], text: isMax ? 'レベル MAX！' : (isCap ? 'Lv上限 ' + cap + '（バッジで あがる）' : 'つぎの Lvまで あと ' + U().formatNumber(M().expToNext(inst)) + ' EXP') }),
         el('div', { class: 'pt-d-hp' }, App.ui.hpBar(inst.hp, st.hp), el('span', { class: 'pt-d-hpnum', text: inst.hp + ' / ' + st.hp }))));
 
     const partyBtn = inParty
@@ -561,7 +584,8 @@
     const actions = el('div', { class: 'pt-d-actions' },
       el('span', { class: ['pt-d-where', inParty ? 'is-in' : ''], text: inParty ? 'パーティ ' + (S().partyIds().indexOf(inst.speciesId) + 1) + 'ばんめ' : 'ボックス' }),
       partyBtn,
-      App.ui.button('ニックネーム', { size: 'sm', variant: 'ghost', className: 'pt-btn-rename', onClick: () => rename(inst) }));
+      App.ui.button('ニックネーム', { size: 'sm', variant: 'ghost', className: 'pt-btn-rename', onClick: () => rename(inst) }),
+      evolveButton(inst));
 
     // 能力値
     const statRows = STAT_KEYS.map((k) => {
@@ -624,6 +648,96 @@
         el('span', {}, 'いりょく ', el('b', { text: mv.power > 0 ? String(mv.power) : '―' })),
         el('span', {}, 'めいちゅう ', el('b', { text: mv.accuracy > 0 ? String(mv.accuracy) : '―' }))),
       el('div', { class: 'pt-move-desc', text: mv.desc || '' }));
+  }
+
+  // ---------------------------------------------------------------- 進化（SPEC 10.4）
+  // 進化しない種は null（非表示）。条件未達は「Lv〇〇で しんか」の無効ボタン
+  function evolveButton(inst) {
+    const ev = D().evolutionOf ? D().evolutionOf(inst.speciesId) : null;
+    if (!ev) return null;
+    const ready = !!M().canEvolve(inst) && !S().owned(ev.to);
+    return App.ui.button(ready ? 'しんかさせる' : 'Lv' + ev.level + 'で しんか', {
+      size: 'sm', variant: ready ? 'gold' : 'ghost', className: 'pt-btn-evolve', disabled: !ready,
+      title: ready ? 'しんかさせる' : 'Lv' + ev.level + 'に なると しんかできる',
+      onClick: () => evolveInst(inst),
+    });
+  }
+
+  function evolveInst(inst) {
+    const fromId = inst && inst.speciesId;
+    const toId = inst ? M().canEvolve(inst) : null;
+    const toDef = toId ? D().monster(toId) : null;
+    if (!toDef || S().owned(toId)) return Promise.resolve(false);
+    const name = M().displayName(inst);
+    sfx('select');
+    return App.ui.confirm(name + 'を ' + toDef.name + 'に しんかさせますか？', { title: 'しんか', okLabel: 'しんかさせる' })
+      .then((ok) => (ok ? evolveAnim(inst, fromId, toDef, name) : false));
+  }
+
+  function flashOverlay(node) {
+    node.classList.remove('is-flash');
+    void node.offsetWidth;
+    node.classList.add('is-flash');
+  }
+
+  // DOM による簡易進化演出 → App.state.evolve → 新わざ習得（空き枠のみ。残りは NEWわざ として入れ替え可能）
+  function evolveAnim(inst, fromId, toDef, name) {
+    const fromImg = spriteImg(D().monster(fromId), 'pt-evo-img');
+    const toImg = spriteImg(toDef, 'pt-evo-img');
+    toImg.classList.add('is-hidden');
+    const stage = el('div', { class: 'pt-evo-stage is-glow' }, fromImg, toImg);
+    const msg = el('p', { class: 'pt-evo-msg', text: 'おや…？ ' + name + 'の ようすが…！' });
+    const okBtn = App.ui.button('OK', { variant: 'primary', className: 'pt-evo-ok' });
+    okBtn.hidden = true;
+    const overlay = el('div', { class: 'pt-evo-overlay', role: 'dialog', 'aria-modal': 'true' },
+      el('div', { class: 'pt-evo-box' }, stage, msg, okBtn));
+    document.body.appendChild(overlay);
+    sfx('statUp');
+    const steps = 14;
+    return new Promise((resolve) => {
+      let i = 0;
+      const tick = () => {
+        if (i < steps) {
+          const showTo = i % 2 === 1;
+          fromImg.classList.toggle('is-hidden', showTo);
+          toImg.classList.toggle('is-hidden', !showTo);
+          if (i % 4 === 0) flashOverlay(overlay);
+          i++;
+          setTimeout(tick, Math.max(80, 320 - i * 18));
+          return;
+        }
+        stage.classList.remove('is-glow');
+        fromImg.classList.add('is-hidden');
+        toImg.classList.remove('is-hidden');
+        flashOverlay(overlay);
+        const r = S().evolve(fromId);
+        if (!r) {
+          fromImg.classList.remove('is-hidden');
+          toImg.classList.add('is-hidden');
+          msg.textContent = 'しんか できませんでした';
+          sfx('error');
+        } else {
+          sfx('levelup');
+          const learned = [];
+          for (const id of r.newMoves || []) {
+            if (inst.moves.length >= 4 || inst.moves.some((m) => m.id === id)) continue;
+            inst.moves.push({ id, pp: M().maxPP(id) });
+            learned.push(id);
+          }
+          if (learned.length) notifyUpdated(inst);
+          const lines = ['おめでとう！ ' + name + 'は ' + toDef.name + 'に しんかした！'];
+          learned.forEach((id) => { const mv = D().move(id); lines.push(M().displayName(inst) + 'は ' + (mv ? mv.name : id) + 'を おぼえた！'); });
+          if ((r.newMoves || []).length > learned.length) lines.push('あたらしい わざは 「わざを いれかえる」から おぼえられます');
+          msg.textContent = lines.join('\n');
+          selectedId = r.to;
+          markDirty();
+        }
+        okBtn.hidden = false;
+        try { okBtn.focus({ preventScroll: true }); } catch (e) { /* 無視 */ }
+        okBtn.addEventListener('click', () => { sfx('confirm'); overlay.remove(); resolve(!!r); }, { once: true });
+      };
+      setTimeout(tick, 900);
+    });
   }
 
   // ---------------------------------------------------------------- ニックネーム
@@ -757,6 +871,7 @@
     init, onShow, onHide,
     // 追加（テスト・他モジュール用）
     select(id) { if (S().owned(id)) { selectedId = id; if (visible) render(); else markDirty(); } },
+    evolve(id) { return evolveInst(S().owned(id)); },
     selected() { return selectedId; },
     newMoves,
     filters() { return { rarity: Array.from(filters.rarity), type: filters.type, where: filters.where, sort: filters.sort, desc: filters.desc }; },

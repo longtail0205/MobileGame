@@ -250,6 +250,7 @@
       return {
         speciesId: d.speciesId, rarity: d.rarity, pickup: d.pickup, forced: d.forced,
         isNew: r.isNew, limitBreak: r.limitBreak, refund: r.refund, joinedParty: r.joinedParty,
+        ownedId: r.ownedId || d.speciesId,   // 凸・返還の対象（系統内の所持個体。進化後のこともある）
       };
     });
     if (S.data.gacha) S.data.gacha.pity = ps.pity;

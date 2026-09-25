@@ -253,6 +253,19 @@
     const free = $('#tb-free');
     if (free) free.addEventListener('click', () => switchTab('gacha'));
 
+    // バッジ数の小表示（クリックで その他タブのバッジケースへ）
+    const right = $('#topbar .tb-right');
+    const badgeTotal = (window.GameData && Array.isArray(window.GameData.badges)) ? window.GameData.badges.length : 0;
+    if (right && badgeTotal && App.state.badgeCount) {
+      const el = App.util.el;
+      const btn = el('button', { id: 'tb-badges', class: 'tb-badges', type: 'button' }, el('span', { class: 'gm-badge' }), el('b', { text: '0' }));
+      right.insertBefore(btn, $('#tb-points'));
+      btn.addEventListener('click', () => switchTab('settings'));
+      updateBadges();
+      App.events.on('badges:changed', updateBadges);
+      App.events.on('state:loaded', updateBadges);
+    }
+
     App.events.on('points:changed', (p) => animatePoints(p.points, p.delta));
     App.events.on('freepulls:changed', (p) => updateFreePulls(p.freePulls));
     App.events.on('settings:changed', (p) => { if (p.key === 'sound') updateSoundBtn(); });
@@ -284,6 +297,16 @@
     setTimeout(() => fl.remove(), 1200);
   }
 
+  function updateBadges() {
+    const btn = $('#tb-badges');
+    if (!btn || !App.state.data) return;
+    const total = (window.GameData.badges || []).length;
+    const n = App.state.badgeCount();
+    btn.querySelector('b').textContent = n + '/' + total;
+    btn.classList.toggle('is-none', n === 0);
+    btn.title = 'バッジ ' + n + '/' + total + '（Lv上限 ' + App.state.levelCap() + '）' + (App.state.isChampion() ? ' ・チャンピオン' : '');
+  }
+
   function updateFreePulls(n) {
     const free = $('#tb-free');
     if (free) {
@@ -291,7 +314,7 @@
       const b = free.querySelector('b');
       if (b) b.textContent = String(n);
     }
-    setTabBadge('gacha', n > 0 ? String(n) : null);
+    setTabBadge('gacha', n > 0 ? '無料' + n : null);
   }
 
   function updateSoundBtn() {

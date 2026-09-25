@@ -1362,6 +1362,18 @@ kbd {
 .player-name { font-weight: normal; font-size: 22px; color: #fff; }
 .player-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--text-dim); }
 .player-meta b { font-weight: normal; color: #fff; }
+.badge-case { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.badge-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0;
+  padding: 10px 4px 8px; border-radius: 10px; text-align: center;
+  background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.badge-slot.is-got { background: radial-gradient(circle at 50% 30%, rgba(255, 230, 140, 0.16), rgba(0, 0, 0, 0.28) 70%); }
+.badge-slot .gm-badge { width: 40px; height: 40px; }
+.badge-name { font-weight: normal; font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge-slot:not(.is-got) .badge-name { color: var(--text-dim); }
+.badge-date { font-size: 10px; color: var(--text-dim); }
+.badge-note { margin: 6px 0 0; font-size: 12px; }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
 .stat-tile { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.06); }
 .stat-label { font-size: 11px; color: var(--text-mute); }
@@ -1402,6 +1414,25 @@ kbd {
 
 .noscript { padding: 40px; text-align: center; }
 
+
+/* ---- バッジ（SPEC 11。battle / settings / トップバーで共用） */
+.gm-badge {
+  --bc: #f0c040;
+  display: inline-block; flex: none; width: 18px; height: 18px; position: relative;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.85) 0 12%, transparent 30%),
+    linear-gradient(135deg, color-mix(in srgb, var(--bc) 55%, #fff) 0%, var(--bc) 45%, color-mix(in srgb, var(--bc) 60%, #000) 100%);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.gm-badge.is-empty { background: #3a4050; opacity: 0.55; }
+.tb-badges {
+  display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px 0 8px;
+  border: 0; border-radius: 999px; cursor: pointer; font-size: 13px; color: #fff4c0;
+  background: linear-gradient(180deg, #4a5578, #2c3350);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 0 #151a2c;
+}
+.tb-badges b { font-weight: normal; }
+.tb-badges.is-none .gm-badge { filter: grayscale(1) brightness(0.6); }
 /* ---------------------------------------------------------------- 狭い画面 */
 @media (max-width: 720px) {
   :root { --topbar-h: 52px; }
@@ -1415,6 +1446,7 @@ kbd {
   .tb-free { height: 28px; padding-left: 8px; font-size: 0; }
   .tb-free::before { content: '無料'; font-size: 11px; }
   .tb-free b { font-size: 12px; }
+  .tb-badges { height: 28px; padding: 0 7px 0 6px; font-size: 12px; }
   body.has-overrides .tb-logo::after { display: none; }
   .tb-icon-btn { width: 34px; height: 34px; }
   #tabbar {
